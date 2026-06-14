@@ -124,11 +124,30 @@ namespace rdpManager.Helpers
             }
         }
 
-        /// <summary>
-        /// 获取当前系统中非内置的本地账户列表
-        /// </summary>
-        public static System.Collections.Generic.List<LocalAccountInfo> GetLocalAccounts()
+        private static readonly object _cacheLock = new object();
+        private static System.Collections.Generic.List<LocalAccountInfo>? _cachedAccounts;
+
+        public static bool HasCache()
         {
+            lock (_cacheLock)
+            {
+                return _cachedAccounts != null;
+            }
+        }
+
+        /// <summary>
+        /// 获取当前系统中非内置的本地账户列表（带缓存支持）
+        /// </summary>
+        public static System.Collections.Generic.List<LocalAccountInfo> GetLocalAccounts(bool forceRefresh = false)
+        {
+            lock (_cacheLock)
+            {
+                if (_cachedAccounts != null && !forceRefresh)
+                {
+                    return new System.Collections.Generic.List<LocalAccountInfo>(_cachedAccounts);
+                }
+            }
+
             var accounts = new System.Collections.Generic.List<LocalAccountInfo>();
             try
             {
@@ -192,6 +211,11 @@ namespace rdpManager.Helpers
             catch (Exception ex)
             {
                 Logger.LogError("获取本地账户列表时发生异常", ex);
+            }
+
+            lock (_cacheLock)
+            {
+                _cachedAccounts = accounts;
             }
             return accounts;
         }

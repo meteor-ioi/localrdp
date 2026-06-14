@@ -30,14 +30,16 @@ namespace rdpManager.Views
                 _isHiddenSession = value;
                 if (_isHiddenSession)
                 {
-                    // 虚假断开：降低透明度为0，并禁用鼠标/键盘命中，移到侧边，但保持在视觉树中以继续渲染
+                    // 虚假断开：降低透明度为0，并禁用鼠标/键盘命中，物理移出可见区域以绕过 WinForms 遮罩问题，但保持在视觉树中继续渲染
                     this.Opacity = 0;
                     this.IsHitTestVisible = false;
+                    this.Margin = new System.Windows.Thickness(-10000, 0, 10000, 0);
                 }
                 else
                 {
                     this.Opacity = 1;
                     this.IsHitTestVisible = true;
+                    this.Margin = new System.Windows.Thickness(0);
                 }
             }
         }
@@ -49,6 +51,9 @@ namespace rdpManager.Views
         private string? _pendingUsername;
         private string? _pendingPassword;
         private bool _pendingEnableUsb;
+        private bool _pendingEnableSmartSizing;
+        private bool _pendingEnableClipboard;
+        private bool _pendingMuteAudio;
         private bool _connectPending = false;
 
         public RdpClientControl()
@@ -68,6 +73,9 @@ namespace rdpManager.Views
                     _rdpControl.BeginInit();
                     RdpHost.Child = _rdpControl;
                     _rdpControl.EndInit();
+
+                    // 让 WinForms 控件铺满容器
+                    _rdpControl.Dock = System.Windows.Forms.DockStyle.Fill;
 
                     // 绑定事件
                     _rdpControl.OnConnected += (s, ev) =>
@@ -90,7 +98,8 @@ namespace rdpManager.Views
                 {
                     Logger.LogInfo("检测到有缓存的连接请求，立即执行连接。");
                     _connectPending = false;
-                    Connect(_pendingServer!, _pendingUsername!, _pendingPassword!, _pendingEnableUsb);
+                    Connect(_pendingServer!, _pendingUsername!, _pendingPassword!, 
+                        _pendingEnableUsb, _pendingEnableSmartSizing, _pendingEnableClipboard, _pendingMuteAudio);
                 }
             }
             catch (Exception ex)
@@ -103,9 +112,11 @@ namespace rdpManager.Views
         /// <summary>
         /// 配置并连接 RDP
         /// </summary>
-        public void Connect(string server, string username, string password, bool enableUsb = false)
+        public void Connect(string server, string username, string password, 
+            bool enableUsb = false, bool enableSmartSizing = true, 
+            bool enableClipboard = true, bool muteAudio = true)
         {
-            Logger.LogInfo($"RdpClientControl.Connect() 被调用: Server={server}, Username={username}, EnableUsb={enableUsb}");
+            Logger.LogInfo($"RdpClientControl.Connect() 被调用: Server={server}, Username={username}, EnableUsb={enableUsb}, EnableSmartSizing={enableSmartSizing}, EnableClipboard={enableClipboard}, MuteAudio={muteAudio}");
             if (_rdpControl == null)
             {
                 Logger.LogInfo("WinForms RDP 控件尚未完成 Load，缓存连接请求以待加载完成后执行。");
@@ -113,6 +124,9 @@ namespace rdpManager.Views
                 _pendingUsername = username;
                 _pendingPassword = password;
                 _pendingEnableUsb = enableUsb;
+                _pendingEnableSmartSizing = enableSmartSizing;
+                _pendingEnableClipboard = enableClipboard;
+                _pendingMuteAudio = muteAudio;
                 _connectPending = true;
                 return;
             }
@@ -123,6 +137,10 @@ namespace rdpManager.Views
 
             _rdpControl.Server = server;
             _rdpControl.UserName = username;
+            
+            // 设置远程分辨率为 1920x1080，配合 SmartSizing 达到完美缩放效果
+            _rdpControl.DesktopWidth = 1920;
+            _rdpControl.DesktopHeight = 1080;
 
             // 设置密码 (通过 COM 接口转换设置明文密码)
             var advancedSettings = (IMsRdpClientAdvancedSettings)_rdpControl.AdvancedSettings;
@@ -130,8 +148,8 @@ namespace rdpManager.Views
 
             // RDP 基础优化配置
             var advancedSettings5 = (IMsRdpClientAdvancedSettings5)_rdpControl.AdvancedSettings;
-            advancedSettings5.SmartSizing = true;       // 分辨率自适应缩放
-            advancedSettings5.RedirectClipboard = true; // 启用双向剪贴板
+            advancedSettings5.SmartSizing = enableSmartSizing;       // 分辨率自适应缩放
+            advancedSettings5.RedirectClipboard = enableClipboard; // 启用双向剪贴板
             advancedSettings5.RedirectPrinters = false; // 禁用打印机重定向以优化速度
             advancedSettings5.RedirectSmartCards = false;
 
@@ -139,7 +157,7 @@ namespace rdpManager.Views
             if (_rdpControl.SecuredSettings != null)
             {
                 var securedSettings = (IMsRdpClientSecuredSettings)_rdpControl.SecuredSettings;
-                securedSettings.AudioRedirectionMode = 1;
+                securedSettings.AudioRedirectionMode = muteAudio ? 1 : 0;
             }
 
             // 如果开启了外设重定向 (UmWrap 功能)

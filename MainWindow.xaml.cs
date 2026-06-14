@@ -29,6 +29,9 @@ namespace rdpManager
             // 绑定连接列表数据源
             ConnectionCardsControl.ItemsSource = _connections;
 
+            // 加载持久化的连接配置
+            LoadConnections();
+
             // 初始时不选定任何 Tab，默认显示仪表盘
             WorkspaceTabs.SelectedIndex = -1;
 
@@ -52,6 +55,9 @@ namespace rdpManager
             // 默认展示仪表盘
             SwitchToView(ViewWorkspaces);
             UpdateNavButtons(NavDashboardBtn);
+
+            // 后台异步预热本地账户列表缓存
+            _ = System.Threading.Tasks.Task.Run(() => AccountHelper.GetLocalAccounts(true));
         }
 
         // ======================= 状态与数据加载 =======================
@@ -97,12 +103,13 @@ namespace rdpManager
             }
         }
 
-        private async void LoadAccountsAsync()
+        private async void LoadAccountsAsync(bool forceRefresh = false)
         {
-            ShowLoading("正在读取账户列表...");
+            bool showLoading = forceRefresh || !AccountHelper.HasCache();
+            if (showLoading) ShowLoading("正在读取账户列表...");
             try
             {
-                var accounts = await System.Threading.Tasks.Task.Run(() => AccountHelper.GetLocalAccounts());
+                var accounts = await System.Threading.Tasks.Task.Run(() => AccountHelper.GetLocalAccounts(forceRefresh));
                 AccountsDataGrid.ItemsSource = accounts;
             }
             catch (Exception ex)
@@ -112,7 +119,7 @@ namespace rdpManager
             }
             finally
             {
-                HideLoading();
+                if (showLoading) HideLoading();
             }
         }
 
@@ -149,7 +156,7 @@ namespace rdpManager
                 else if (clickedBtn == NavAccountsBtn)
                 {
                     SwitchToView(ViewAccounts);
-                    LoadAccountsAsync();
+                    LoadAccountsAsync(false);
                 }
                 else if (clickedBtn == NavSettingsBtn)
                 {
@@ -184,6 +191,13 @@ namespace rdpManager
             {
                 // 显示仪表盘
                 DashboardGridView.Visibility = Visibility.Visible;
+
+                // 隐藏所有活跃的会话控件，解决 WinFormsHost 遮挡仪表盘的问题
+                foreach (var item in _connections)
+                {
+                    if (item.RdpControl != null)
+                        item.RdpControl.IsHiddenSession = true;
+                }
 
                 // 虚无化后台容器以切换展示，但由于仍保留在视觉树，后台依然能够保持渲染与截图
                 ActiveRdpContainer.Opacity = 0;
@@ -254,6 +268,7 @@ namespace rdpManager
             else
             {
                 WorkspaceTabs.SelectedIndex = -1;
+                UpdateNavButtons(NavDashboardBtn);
             }
         }
 
@@ -340,6 +355,12 @@ namespace rdpManager
                             Logger.LogWarning($"收到 RdpClientControl.OnRdpDisconnected 连接断开回调: {connItem.FriendlyName}, 原因: {reason}");
                             Dispatcher.Invoke(() =>
                             {
+                                if (connItem.IsBeingDeleted)
+                                {
+                                    Logger.LogInfo($"检测到连接项 '{connItem.FriendlyName}' 正在被主动删除，静默跳过意外断开提示。");
+                                    return;
+                                }
+
                                 connItem.StatusText = "已断开";
                                 connItem.StatusBrush = Brushes.Red;
                                 connItem.ActiveActionsVisibility = Visibility.Collapsed;
@@ -372,7 +393,11 @@ namespace rdpManager
 
                         // 触发 RDP 连接
                         bool enableUsb = OptUsbChk.IsChecked == true;
-                        rdpCtrl.Connect(connItem.Server, connItem.Username, connItem.Password, enableUsb);
+                        bool enableSmartSizing = OptSmartSizingChk.IsChecked == true;
+                        bool enableClipboard = OptClipboardChk.IsChecked == true;
+                        bool muteAudio = OptMuteChk.IsChecked == true;
+                        rdpCtrl.Connect(connItem.Server, connItem.Username, connItem.Password, 
+                            enableUsb, enableSmartSizing, enableClipboard, muteAudio);
                     }
 
                     Logger.LogInfo("在 WorkspaceTabs 中创建并添加新的 TabItem 标签页。");
@@ -448,10 +473,11 @@ namespace rdpManager
             TargetComputerCombo.Items.Clear();
             TargetComputerCombo.Items.Add("127.0.0.2");
 
-            ShowLoading("正在读取账户配置...");
+            bool showLoading = !AccountHelper.HasCache();
+            if (showLoading) ShowLoading("正在读取账户配置...");
             try
             {
-                var localAccounts = await System.Threading.Tasks.Task.Run(() => AccountHelper.GetLocalAccounts());
+                var localAccounts = await System.Threading.Tasks.Task.Run(() => AccountHelper.GetLocalAccounts(false));
                 foreach (var acc in localAccounts)
                 {
                     TargetComputerCombo.Items.Add(acc.Name);
@@ -463,7 +489,7 @@ namespace rdpManager
             }
             finally
             {
-                HideLoading();
+                if (showLoading) HideLoading();
             }
 
             if (TargetComputerCombo.Items.Count > 0)
@@ -546,6 +572,7 @@ namespace rdpManager
             };
 
             _connections.Add(newItem);
+            SaveConnections();
             NewConnectionOverlay.Visibility = Visibility.Collapsed;
         }
 
@@ -597,7 +624,7 @@ namespace rdpManager
                 MessageBox.Show($"隔离账号 '{username}' 已创建成功，自动完成管理员特权分配与环境首登优化！", "创建成功", MessageBoxButton.OK, MessageBoxImage.Information);
                 NewUserTxt.Text = string.Empty;
                 NewPassTxt.Password = string.Empty;
-                LoadAccountsAsync();
+                LoadAccountsAsync(true);
             }
             else
             {
@@ -642,7 +669,7 @@ namespace rdpManager
                     if (success)
                     {
                         MessageBox.Show($"账户 '{username}' 已成功删除。", "提示", MessageBoxButton.OK, MessageBoxImage.Information);
-                        LoadAccountsAsync();
+                        LoadAccountsAsync(true);
                     }
                     else
                     {
@@ -799,6 +826,114 @@ namespace rdpManager
             Application.Current.Shutdown();
         }
 
+        // ======================= 连接持久化与删除 =======================
+        private static readonly string ConnectionsFilePath = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "connections.json");
+
+        private void SaveConnections()
+        {
+            try
+            {
+                var options = new System.Text.Json.JsonSerializerOptions { WriteIndented = true };
+                string json = System.Text.Json.JsonSerializer.Serialize(_connections, options);
+                System.IO.File.WriteAllText(ConnectionsFilePath, json, System.Text.Encoding.UTF8);
+                Logger.LogInfo("成功持久化连接配置到 connections.json");
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError("保存连接配置到 JSON 失败", ex);
+            }
+        }
+
+        private void LoadConnections()
+        {
+            try
+            {
+                if (System.IO.File.Exists(ConnectionsFilePath))
+                {
+                    string json = System.IO.File.ReadAllText(ConnectionsFilePath, System.Text.Encoding.UTF8);
+                    var items = System.Text.Json.JsonSerializer.Deserialize<List<ConnectionItem>>(json);
+                    if (items != null)
+                    {
+                        _connections.Clear();
+                        foreach (var item in items)
+                        {
+                            _connections.Add(item);
+                        }
+                        Logger.LogInfo($"成功从 connections.json 加载了 {items.Count} 个连接项");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError("从 JSON 加载连接配置失败", ex);
+            }
+        }
+
+        private void DeleteConnection_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is Button btn && btn.Tag is string connId)
+            {
+                var connItem = _connections.FirstOrDefault(c => c.Id == connId);
+                if (connItem == null) return;
+
+                var result = MessageBox.Show($"确定要删除连接设备 '{connItem.FriendlyName}' 吗？此操作不会影响本地系统账户，但会清除该连接的保存配置。", "确认删除", MessageBoxButton.YesNo, MessageBoxImage.Question);
+                if (result == MessageBoxResult.Yes)
+                {
+                    Logger.LogInfo($"开始主动删除连接设备: {connItem.FriendlyName}");
+                    connItem.IsBeingDeleted = true;
+
+                    // 1. 从 WorkspaceTabs 移除对应的 Tab
+                    TabItem? tabToRemove = null;
+                    for (int i = 0; i < WorkspaceTabs.Items.Count; i++)
+                    {
+                        if (WorkspaceTabs.Items[i] is TabItem t && t.Tag == connItem)
+                        {
+                            tabToRemove = t;
+                            break;
+                        }
+                    }
+                    if (tabToRemove != null)
+                    {
+                        WorkspaceTabs.Items.Remove(tabToRemove);
+                        if (WorkspaceTabs.Items.Count > 0)
+                        {
+                            WorkspaceTabs.SelectedIndex = WorkspaceTabs.Items.Count - 1;
+                        }
+                        else
+                        {
+                            WorkspaceTabs.SelectedIndex = -1;
+                            UpdateNavButtons(NavDashboardBtn);
+                        }
+                    }
+
+                    // 2. 从视觉容器中移除控件，断开连接
+                    if (connItem.RdpControl != null)
+                    {
+                        var rdpControl = connItem.RdpControl;
+                        ActiveRdpContainer.Children.Remove(rdpControl);
+                        connItem.RdpControl = null;
+                        
+                        // 异步执行断开
+                        System.Threading.Tasks.Task.Run(() =>
+                        {
+                            try
+                            {
+                                rdpControl.Disconnect();
+                            }
+                            catch (Exception ex)
+                            {
+                                Logger.LogWarning($"断开被删除连接 '{connItem.FriendlyName}' 时发生异常: {ex.Message}");
+                            }
+                        });
+                    }
+
+                    // 3. 从列表中移除并保存
+                    _connections.Remove(connItem);
+                    SaveConnections();
+                }
+            }
+        }
+
         protected override void OnClosing(CancelEventArgs e)
         {
             if (_isExplicitExit)
@@ -851,34 +986,45 @@ namespace rdpManager
         public string FriendlyName { get; set; } = string.Empty;
         public string Server { get; set; } = string.Empty;
         public string Username { get; set; } = string.Empty;
+
+        [System.Text.Json.Serialization.JsonIgnore]
         public string Password { get; set; } = string.Empty;
 
+        [System.Text.Json.Serialization.JsonIgnore]
         public RdpClientControl? RdpControl { get; set; }
 
+        [System.Text.Json.Serialization.JsonIgnore]
+        public bool IsBeingDeleted { get; set; } = false;
+
+        [System.Text.Json.Serialization.JsonIgnore]
         public string StatusText
         {
             get => _statusText;
             set { _statusText = value; OnPropertyChanged(); }
         }
 
+        [System.Text.Json.Serialization.JsonIgnore]
         public Brush StatusBrush
         {
             get => _statusBrush;
             set { _statusBrush = value; OnPropertyChanged(); }
         }
 
+        [System.Text.Json.Serialization.JsonIgnore]
         public BitmapSource? Thumbnail
         {
             get => _thumbnail;
             set { _thumbnail = value; OnPropertyChanged(); }
         }
 
+        [System.Text.Json.Serialization.JsonIgnore]
         public Visibility PlaceholderVisibility
         {
             get => _placeholderVisibility;
             set { _placeholderVisibility = value; OnPropertyChanged(); }
         }
 
+        [System.Text.Json.Serialization.JsonIgnore]
         public Visibility ActiveActionsVisibility
         {
             get => _activeActionsVisibility;
