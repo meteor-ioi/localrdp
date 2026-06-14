@@ -107,12 +107,14 @@ namespace rdpManager.Helpers
                 }
 
                 // 6. 恢复 TermService 服务类型为共享进程 (0x20)。之前尝试使用 0x10 独立进程会破坏 Windows 系统的 RPC/COM 绑定安全上下文，导致 516 连接拒绝。
+                //    同时设置 SvcHostSplitDisable=1，防止 Windows 10 自动将共享进程服务拆分为独立进程（此行为会导致运行时 Type 回退为 0x10）。
                 using (RegistryKey? svcKey = Registry.LocalMachine.OpenSubKey(@"SYSTEM\CurrentControlSet\Services\TermService", true))
                 {
                     if (svcKey != null)
                     {
                         svcKey.SetValue("Type", 0x20, RegistryValueKind.DWord);
-                        Logger.LogInfo("已确保 TermService 服务运行类型为默认共享进程 (0x20)。");
+                        svcKey.SetValue("SvcHostSplitDisable", 1, RegistryValueKind.DWord);
+                        Logger.LogInfo("已确保 TermService 服务运行类型为默认共享进程 (0x20)，并禁止系统自动拆分。");
                     }
                 }
 
@@ -298,7 +300,7 @@ namespace rdpManager.Helpers
         }
 
         /// <summary>
-        /// 控制服务的停止与启动
+        /// 控制服务的停止与启动。停止时若超时则自动使用 taskkill 强制终止承载进程。
         /// </summary>
         private static void ControlService(string serviceName, bool stop)
         {
@@ -309,7 +311,15 @@ namespace rdpManager.Helpers
                     if (sc.Status != ServiceControllerStatus.Stopped && sc.Status != ServiceControllerStatus.StopPending)
                     {
                         sc.Stop();
-                        sc.WaitForStatus(ServiceControllerStatus.Stopped, TimeSpan.FromSeconds(30));
+                        try
+                        {
+                            sc.WaitForStatus(ServiceControllerStatus.Stopped, TimeSpan.FromSeconds(30));
+                        }
+                        catch (TimeoutException)
+                        {
+                            Logger.LogWarning($"服务 {serviceName} 在 30 秒内未能正常停止，正在强制终止承载进程...");
+                            ForceKillService(serviceName);
+                        }
                     }
                 }
                 else
@@ -321,6 +331,30 @@ namespace rdpManager.Helpers
                     }
                 }
             }
+        }
+
+        /// <summary>
+        /// 当服务无法在超时时间内正常停止时，使用 taskkill 强制终止承载该服务的进程
+        /// </summary>
+        private static void ForceKillService(string serviceName)
+        {
+            var psi = new ProcessStartInfo("taskkill", $"/f /fi \"services eq {serviceName}\"")
+            {
+                UseShellExecute = false,
+                CreateNoWindow = true,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true
+            };
+            using (var proc = Process.Start(psi))
+            {
+                if (proc != null)
+                {
+                    proc.WaitForExit(10000);
+                    Logger.LogInfo($"强制终止服务 {serviceName} 的承载进程，退出码: {proc.ExitCode}");
+                }
+            }
+            // 等待系统释放文件句柄和资源锁
+            Thread.Sleep(3000);
         }
 
         /// <summary>
