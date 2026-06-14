@@ -88,7 +88,7 @@ jobs:
           /p:RuntimeIdentifier=win-x64 `
           /p:SelfContained=true `
           /p:PublishSingleFile=true `
-          /p:PublishReadyToRun=true `
+          /p:PublishReadyToRun=false `
           /p:IncludeNativeLibrariesForSelfContained=true `
           /p:PublishDir=./publish
 
