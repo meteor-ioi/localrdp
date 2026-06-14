@@ -19,7 +19,6 @@ namespace rdpManager
     {
         private ObservableCollection<ConnectionItem> _connections = new ObservableCollection<ConnectionItem>();
         private DispatcherTimer _thumbnailTimer;
-        private TabItem _dashboardTab;
         private System.Windows.Forms.NotifyIcon? _notifyIcon;
         private bool _isExplicitExit = false;
 
@@ -30,13 +29,8 @@ namespace rdpManager
             // 绑定连接列表数据源
             ConnectionCardsControl.ItemsSource = _connections;
 
-            // 初始化固定的第一个 TabItem: 仪表盘
-            _dashboardTab = new TabItem
-            {
-                Header = "仪表盘"
-            };
-            WorkspaceTabs.Items.Add(_dashboardTab);
-            WorkspaceTabs.SelectedIndex = 0;
+            // 初始时不选定任何 Tab，默认显示仪表盘
+            WorkspaceTabs.SelectedIndex = -1;
 
             // 启动定时器，每 3 秒刷新一次连接网格的屏幕截图
             _thumbnailTimer = new DispatcherTimer();
@@ -65,6 +59,7 @@ namespace rdpManager
         private void RefreshTermWrapStatus()
         {
             bool isActive = TermWrapDeployer.IsMultiSessionActive();
+            Logger.LogInfo($"检测 TermWrap 补丁状态: {(isActive ? "已激活" : "未激活")}");
             if (isActive)
             {
                 StatusDot.Fill = (Brush)new BrushConverter().ConvertFromString("#0070F3"); // Vercel 经典蓝色
@@ -128,7 +123,7 @@ namespace rdpManager
                 if (clickedBtn == NavDashboardBtn)
                 {
                     SwitchToView(ViewWorkspaces);
-                    WorkspaceTabs.SelectedIndex = 0; // 选定仪表盘
+                    WorkspaceTabs.SelectedIndex = -1; // 取消选择所有会话标签以显示仪表盘
                 }
                 else if (clickedBtn == NavAccountsBtn)
                 {
@@ -164,7 +159,7 @@ namespace rdpManager
 
         private void WorkspaceTabs_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
-            if (WorkspaceTabs.SelectedIndex == 0)
+            if (WorkspaceTabs.SelectedIndex == -1)
             {
                 // 显示仪表盘
                 DashboardGridView.Visibility = Visibility.Visible;
@@ -174,7 +169,7 @@ namespace rdpManager
                 ActiveRdpContainer.IsHitTestVisible = false;
                 ActiveRdpContainer.Visibility = Visibility.Visible;
             }
-            else if (WorkspaceTabs.SelectedIndex > 0)
+            else
             {
                 // 隐藏仪表盘，显示会话页面
                 DashboardGridView.Visibility = Visibility.Collapsed;
@@ -205,6 +200,7 @@ namespace rdpManager
 
         private void CloseTabToKeepAlive(ConnectionItem connItem)
         {
+            Logger.LogInfo($"关闭标签页并保活会话: {connItem.FriendlyName}");
             if (connItem.RdpControl != null && connItem.RdpControl.IsConnected)
             {
                 // 虚假断开：将 RDP 控件的透明度调为 0，允许其在后台维持渲染
@@ -215,7 +211,7 @@ namespace rdpManager
 
             // 从 Tab 列表中移除对应标签页
             TabItem? tabToRemove = null;
-            for (int i = 1; i < WorkspaceTabs.Items.Count; i++)
+            for (int i = 0; i < WorkspaceTabs.Items.Count; i++)
             {
                 if (WorkspaceTabs.Items[i] is TabItem t && t.Tag == connItem)
                 {
@@ -229,8 +225,15 @@ namespace rdpManager
                 WorkspaceTabs.Items.Remove(tabToRemove);
             }
 
-            // 切换回仪表盘
-            WorkspaceTabs.SelectedIndex = 0;
+            // 切换回仪表盘或前一个标签页
+            if (WorkspaceTabs.Items.Count > 0)
+            {
+                WorkspaceTabs.SelectedIndex = WorkspaceTabs.Items.Count - 1;
+            }
+            else
+            {
+                WorkspaceTabs.SelectedIndex = -1;
+            }
         }
 
         // ======================= 定时器与卡片截图 =======================
@@ -260,13 +263,15 @@ namespace rdpManager
                 var connItem = _connections.FirstOrDefault(c => c.Id == connId);
                 if (connItem == null) return;
 
+                Logger.LogInfo($"开始打开或切换至会话标签: FriendlyName={connItem.FriendlyName}");
+
                 // 切换回主视图
                 SwitchToView(ViewWorkspaces);
                 UpdateNavButtons(NavDashboardBtn);
 
                 // 检查是否已存在 Tab 页
                 TabItem? existingTab = null;
-                for (int i = 1; i < WorkspaceTabs.Items.Count; i++)
+                for (int i = 0; i < WorkspaceTabs.Items.Count; i++)
                 {
                     if (WorkspaceTabs.Items[i] is TabItem t && t.Tag == connItem)
                     {
@@ -277,6 +282,7 @@ namespace rdpManager
 
                 if (existingTab != null)
                 {
+                    Logger.LogInfo("找到已存在的会话标签页，直接切换选中。");
                     WorkspaceTabs.SelectedItem = existingTab;
                 }
                 else
@@ -284,6 +290,7 @@ namespace rdpManager
                     // 控件未初始化
                     if (connItem.RdpControl == null)
                     {
+                        Logger.LogInfo("新建 RdpClientControl 实例并加入视觉树。");
                         var rdpCtrl = new RdpClientControl();
                         connItem.RdpControl = rdpCtrl;
 
@@ -296,6 +303,7 @@ namespace rdpManager
                         // 绑定事件
                         rdpCtrl.OnRdpConnected += (s, ev) =>
                         {
+                            Logger.LogInfo($"收到 RdpClientControl.OnRdpConnected 连接成功回调: {connItem.FriendlyName}");
                             Dispatcher.Invoke(() =>
                             {
                                 connItem.StatusText = "已连接";
@@ -308,6 +316,7 @@ namespace rdpManager
 
                         rdpCtrl.OnRdpDisconnected += (s, reason) =>
                         {
+                            Logger.LogWarning($"收到 RdpClientControl.OnRdpDisconnected 连接断开回调: {connItem.FriendlyName}, 原因: {reason}");
                             Dispatcher.Invoke(() =>
                             {
                                 connItem.StatusText = "已断开";
@@ -323,7 +332,7 @@ namespace rdpManager
                                 }
 
                                 TabItem? tabToRemove = null;
-                                for (int i = 1; i < WorkspaceTabs.Items.Count; i++)
+                                for (int i = 0; i < WorkspaceTabs.Items.Count; i++)
                                 {
                                     if (WorkspaceTabs.Items[i] is TabItem t && t.Tag == connItem)
                                     {
@@ -345,6 +354,7 @@ namespace rdpManager
                         rdpCtrl.Connect(connItem.Server, connItem.Username, connItem.Password, enableUsb);
                     }
 
+                    Logger.LogInfo("在 WorkspaceTabs 中创建并添加新的 TabItem 标签页。");
                     // 新建 TabPage
                     var newTab = new TabItem { Tag = connItem };
 
@@ -380,7 +390,7 @@ namespace rdpManager
                 if (connItem == null) return;
 
                 bool isTabOpen = false;
-                for (int i = 1; i < WorkspaceTabs.Items.Count; i++)
+                for (int i = 0; i < WorkspaceTabs.Items.Count; i++)
                 {
                     if (WorkspaceTabs.Items[i] is TabItem t && t.Tag == connItem)
                     {
@@ -400,6 +410,7 @@ namespace rdpManager
                     var result = MessageBox.Show($"是否确定彻底断开会话 '{connItem.FriendlyName}'？这将清理该隔离账户下的所有执行进程。", "断开连接", MessageBoxButton.YesNo, MessageBoxImage.Question);
                     if (result == MessageBoxResult.Yes)
                     {
+                        Logger.LogInfo($"彻底注销会话并清理句柄: {connItem.FriendlyName}");
                         connItem.RdpControl?.Disconnect();
                     }
                 }

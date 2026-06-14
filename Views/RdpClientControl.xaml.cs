@@ -44,6 +44,12 @@ namespace rdpManager.Views
         public event EventHandler? OnRdpConnected;
         public event EventHandler<string>? OnRdpDisconnected;
 
+        private string? _pendingServer;
+        private string? _pendingUsername;
+        private string? _pendingPassword;
+        private bool _pendingEnableUsb;
+        private bool _connectPending = false;
+
         public RdpClientControl()
         {
             InitializeComponent();
@@ -54,27 +60,41 @@ namespace rdpManager.Views
         {
             try
             {
-                _rdpControl = new AxMSTSCLib.AxMsTscAxNotSafeForScripting();
-                _rdpControl.BeginInit();
-                RdpHost.Child = _rdpControl;
-                _rdpControl.EndInit();
-
-                // 绑定事件
-                _rdpControl.OnConnected += (s, ev) =>
+                if (_rdpControl == null)
                 {
-                    IsConnected = true;
-                    OnRdpConnected?.Invoke(this, EventArgs.Empty);
-                };
+                    Logger.LogInfo("开始在 WinFormsHost 中实例化 AxMsTscAxNotSafeForScripting 控件...");
+                    _rdpControl = new AxMSTSCLib.AxMsTscAxNotSafeForScripting();
+                    _rdpControl.BeginInit();
+                    RdpHost.Child = _rdpControl;
+                    _rdpControl.EndInit();
 
-                _rdpControl.OnDisconnected += (s, ev) =>
+                    // 绑定事件
+                    _rdpControl.OnConnected += (s, ev) =>
+                    {
+                        Logger.LogInfo($"AxMsTscAx 触发 OnConnected 回调: Server={ServerName}");
+                        IsConnected = true;
+                        OnRdpConnected?.Invoke(this, EventArgs.Empty);
+                    };
+
+                    _rdpControl.OnDisconnected += (s, ev) =>
+                    {
+                        IsConnected = false;
+                        string reason = $"连接已断开 (代码: {ev.discReason})";
+                        Logger.LogWarning($"AxMsTscAx 触发 OnDisconnected 回调: Server={ServerName}, Reason={reason}");
+                        OnRdpDisconnected?.Invoke(this, reason);
+                    };
+                }
+
+                if (_connectPending)
                 {
-                    IsConnected = false;
-                    string reason = $"连接已断开 (代码: {ev.discReason})";
-                    OnRdpDisconnected?.Invoke(this, reason);
-                };
+                    Logger.LogInfo("检测到有缓存的连接请求，立即执行连接。");
+                    _connectPending = false;
+                    Connect(_pendingServer!, _pendingUsername!, _pendingPassword!, _pendingEnableUsb);
+                }
             }
             catch (Exception ex)
             {
+                Logger.LogError("初始化 RDP 控件失败", ex);
                 MessageBox.Show($"初始化 RDP 控件失败: {ex.Message}");
             }
         }
@@ -84,7 +104,17 @@ namespace rdpManager.Views
         /// </summary>
         public void Connect(string server, string username, string password, bool enableUsb = false)
         {
-            if (_rdpControl == null) return;
+            Logger.LogInfo($"RdpClientControl.Connect() 被调用: Server={server}, Username={username}, EnableUsb={enableUsb}");
+            if (_rdpControl == null)
+            {
+                Logger.LogInfo("WinForms RDP 控件尚未完成 Load，缓存连接请求以待加载完成后执行。");
+                _pendingServer = server;
+                _pendingUsername = username;
+                _pendingPassword = password;
+                _pendingEnableUsb = enableUsb;
+                _connectPending = true;
+                return;
+            }
 
             ServerName = server;
             UserName = username;
@@ -119,10 +149,12 @@ namespace rdpManager.Views
 
             try
             {
+                Logger.LogInfo($"调用 ActiveX 控件 Connect(): Server={server}");
                 _rdpControl.Connect();
             }
             catch (Exception ex)
             {
+                Logger.LogError($"调用 Connect() 抛出异常: {ex.Message}", ex);
                 OnRdpDisconnected?.Invoke(this, $"连接尝试失败: {ex.Message}");
             }
         }
