@@ -107,7 +107,7 @@ namespace rdpManager.Views
             // 音频优化：1 = 不在本地播放音频（完全静音运行，节省 CPU 开销）
             if (_rdpControl.SecuredSettings != null)
             {
-                var securedSettings = (IMsTscSecuredSettings)_rdpControl.SecuredSettings;
+                var securedSettings = (IMsRdpClientSecuredSettings)_rdpControl.SecuredSettings;
                 securedSettings.AudioRedirectionMode = 1;
             }
 
