@@ -59,20 +59,41 @@ namespace rdpManager
         private void RefreshTermWrapStatus()
         {
             bool isActive = TermWrapDeployer.IsMultiSessionActive();
-            Logger.LogInfo($"检测 TermWrap 补丁状态: {(isActive ? "已激活" : "未激活")}");
+            bool isRunning = TermWrapDeployer.IsTermServiceRunning();
+            Logger.LogInfo($"检测 TermWrap 补丁状态: {(isActive ? "已激活" : "未激活")}, 远程服务运行状态: {(isRunning ? "正在运行" : "已停止")}");
             if (isActive)
             {
-                StatusDot.Fill = (Brush)new BrushConverter().ConvertFromString("#0070F3"); // Vercel 经典蓝色
-                StatusTxt.Text = "并发会话已激活 (TermWrap)";
-                TermWrapStatusTxt.Text = "已激活 (服务已劫持)";
-                TermWrapStatusTxt.Foreground = (Brush)new BrushConverter().ConvertFromString("#0070F3");
+                if (isRunning)
+                {
+                    StatusDot.Fill = (Brush)new BrushConverter().ConvertFromString("#0070F3"); // Vercel 经典蓝色
+                    StatusTxt.Text = "并发会话已激活 (TermWrap)";
+                    TermWrapStatusTxt.Text = "已激活 (服务已劫持并运行中)";
+                    TermWrapStatusTxt.Foreground = (Brush)new BrushConverter().ConvertFromString("#0070F3");
+                }
+                else
+                {
+                    StatusDot.Fill = (Brush)new BrushConverter().ConvertFromString("#F5A623"); // 警告橙色
+                    StatusTxt.Text = "并发会话已激活，但远程服务已停止";
+                    TermWrapStatusTxt.Text = "已激活 (但服务当前已停止)";
+                    TermWrapStatusTxt.Foreground = (Brush)new BrushConverter().ConvertFromString("#F5A623");
+                }
             }
             else
             {
-                StatusDot.Fill = Brushes.Red;
-                StatusTxt.Text = "并发会话未激活 / 补丁失效";
-                TermWrapStatusTxt.Text = "未激活 / 默认单会话模式";
-                TermWrapStatusTxt.Foreground = Brushes.Red;
+                if (isRunning)
+                {
+                    StatusDot.Fill = Brushes.Red;
+                    StatusTxt.Text = "并发会话未激活 / 补丁未应用";
+                    TermWrapStatusTxt.Text = "未激活 / 默认单会话模式";
+                    TermWrapStatusTxt.Foreground = Brushes.Red;
+                }
+                else
+                {
+                    StatusDot.Fill = Brushes.Red;
+                    StatusTxt.Text = "并发会话未激活，且远程服务已停止";
+                    TermWrapStatusTxt.Text = "未激活 (远程服务已停止)";
+                    TermWrapStatusTxt.Foreground = Brushes.Red;
+                }
             }
         }
 

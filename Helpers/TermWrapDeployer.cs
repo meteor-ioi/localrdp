@@ -39,6 +39,25 @@ namespace rdpManager.Helpers
         }
 
         /// <summary>
+        /// 检查 TermService 服务是否正在运行
+        /// </summary>
+        public static bool IsTermServiceRunning()
+        {
+            try
+            {
+                using (ServiceController sc = new ServiceController("TermService"))
+                {
+                    return sc.Status == ServiceControllerStatus.Running;
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError("检查 TermService 运行状态失败", ex);
+                return false;
+            }
+        }
+
+        /// <summary>
         /// 一键部署/修复 TermWrap 补丁
         /// </summary>
         public static bool DeployPatch(out string errorMessage)
@@ -53,16 +72,29 @@ namespace rdpManager.Helpers
                     Directory.CreateDirectory(RDP_WRAPPER_DIR);
                 }
 
-                // 2. 释放内嵌的 DLL 资源 (TermWrap.dll, UmWrap.dll, Zydis.dll)
+                // 2. 强制注销所有活跃 RDP 会话，再停止服务（确保文件在写入时未被占用）
+                KillAllRdpSessions();
+                ControlService("TermService", stop: true);
+
+                // 3. 释放内嵌的 DLL 资源 (TermWrap.dll, UmWrap.dll, Zydis.dll)
                 ExtractResource("TermWrap.dll", Path.Combine(RDP_WRAPPER_DIR, "TermWrap.dll"));
                 ExtractResource("UmWrap.dll", Path.Combine(RDP_WRAPPER_DIR, "UmWrap.dll"));
                 ExtractResource("Zydis.dll", Path.Combine(RDP_WRAPPER_DIR, "Zydis.dll"));
 
-                // 3. 强制注销所有活跃 RDP 会话，再停止服务（有活跃会话时服务无法停止）
-                KillAllRdpSessions();
-                ControlService("TermService", stop: true);
+                // 4. 额外部署 Zydis.dll 到 System32 目录，这是确保 svchost.exe 能够成功加载 TermWrap.dll 的关键
+                string system32Path = Environment.GetFolderPath(Environment.SpecialFolder.System);
+                string zydisSystem32Path = Path.Combine(system32Path, "Zydis.dll");
+                try
+                {
+                    ExtractResource("Zydis.dll", zydisSystem32Path);
+                    Logger.LogInfo("Zydis.dll 成功释放至 System32 目录。");
+                }
+                catch (Exception ex)
+                {
+                    Logger.LogWarning($"释放 Zydis.dll 到 System32 失败: {ex.Message}。如果该文件已存在，可能不会影响正常加载。");
+                }
 
-                // 4. 修改注册表劫持 ServiceDll
+                // 5. 修改注册表劫持 ServiceDll
                 using (RegistryKey? key = Registry.LocalMachine.OpenSubKey(TERM_SERVICE_REG_PATH, true))
                 {
                     if (key == null)
@@ -74,10 +106,20 @@ namespace rdpManager.Helpers
                     key.SetValue("ServiceDll", PATCHED_SERVICE_DLL, RegistryValueKind.ExpandString);
                 }
 
-                // 5. 注入 RDP 外设重定向优化配置
+                // 6. 将 TermService 服务类型修改为 Own Process (0x10) 强制单独进程承载，规避共享 svchost 缓存问题
+                using (RegistryKey? svcKey = Registry.LocalMachine.OpenSubKey(@"SYSTEM\CurrentControlSet\Services\TermService", true))
+                {
+                    if (svcKey != null)
+                    {
+                        svcKey.SetValue("Type", 0x10, RegistryValueKind.DWord);
+                        Logger.LogInfo("已成功修改 TermService 服务运行类型为独立进程 (0x10)。");
+                    }
+                }
+
+                // 7. 注入 RDP 外设重定向优化配置
                 ApplyDeviceRedirectionPolicies();
 
-                // 6. 重启远程桌面服务
+                // 8. 重启远程桌面服务
                 ControlService("TermService", stop: false);
 
                 Logger.LogInfo("TermWrap 补丁部署成功。");
@@ -89,11 +131,17 @@ namespace rdpManager.Helpers
                 Logger.LogError("部署 TermWrap 补丁发生致命异常，正在自动回滚注册表...", ex);
                 try
                 {
+                    // 回滚 ServiceDll 注册表
                     using (RegistryKey? rollbackKey = Registry.LocalMachine.OpenSubKey(TERM_SERVICE_REG_PATH, true))
                     {
                         rollbackKey?.SetValue("ServiceDll", DEFAULT_SERVICE_DLL, RegistryValueKind.ExpandString);
                     }
-                    Logger.LogInfo("注册表已成功回滚至原厂 termsrv.dll。");
+                    // 回滚服务 Type 注册表为共享进程 (0x20)
+                    using (RegistryKey? svcRollbackKey = Registry.LocalMachine.OpenSubKey(@"SYSTEM\CurrentControlSet\Services\TermService", true))
+                    {
+                        svcRollbackKey?.SetValue("Type", 0x20, RegistryValueKind.DWord);
+                    }
+                    Logger.LogInfo("注册表及服务类型已成功回滚至原厂配置。");
                 }
                 catch (Exception rollbackEx)
                 {
@@ -122,10 +170,32 @@ namespace rdpManager.Helpers
                     key?.SetValue("ServiceDll", DEFAULT_SERVICE_DLL, RegistryValueKind.ExpandString);
                 }
 
-                // 3. 重新启动服务
+                // 3. 恢复服务类型为默认共享进程 (0x20)
+                using (RegistryKey? svcKey = Registry.LocalMachine.OpenSubKey(@"SYSTEM\CurrentControlSet\Services\TermService", true))
+                {
+                    svcKey?.SetValue("Type", 0x20, RegistryValueKind.DWord);
+                }
+
+                // 4. 重新启动服务
                 ControlService("TermService", stop: false);
 
-                // 4. 尝试删除临时文件与目录（由于 DLL 可能会被进程锁住，若失败提示重启是正常的）
+                // 5. 尝试删除 System32 目录下的 Zydis.dll
+                string system32Path = Environment.GetFolderPath(Environment.SpecialFolder.System);
+                string zydisSystem32Path = Path.Combine(system32Path, "Zydis.dll");
+                try
+                {
+                    if (File.Exists(zydisSystem32Path))
+                    {
+                        File.Delete(zydisSystem32Path);
+                        Logger.LogInfo("已成功清理 System32 下的 Zydis.dll。");
+                    }
+                }
+                catch (Exception zydisEx)
+                {
+                    Logger.LogWarning($"清理 System32 下的 Zydis.dll 失败 (可能被占用，重启后可删除): {zydisEx.Message}");
+                }
+
+                // 6. 尝试删除临时文件与目录（由于 DLL 可能会被进程锁住，若失败提示重启是正常的）
                 try
                 {
                     if (Directory.Exists(RDP_WRAPPER_DIR))
