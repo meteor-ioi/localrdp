@@ -60,13 +60,13 @@ namespace rdpManager.Views
                 _rdpControl.EndInit();
 
                 // 绑定事件
-                _rdpControl.OnConnect += (s, ev) =>
+                _rdpControl.OnConnected += (s, ev) =>
                 {
                     IsConnected = true;
                     OnRdpConnected?.Invoke(this, EventArgs.Empty);
                 };
 
-                _rdpControl.OnDisconnect += (s, ev) =>
+                _rdpControl.OnDisconnected += (s, ev) =>
                 {
                     IsConnected = false;
                     string reason = "未知原因";
