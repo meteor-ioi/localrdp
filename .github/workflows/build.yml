@@ -36,10 +36,10 @@ jobs:
         Copy-Item TermWrap\zydis\build\Release\Zydis.lib TermWrap\zydis\msvc\bin\ReleaseX64\ -Force
 
     - name: Build TermWrap DLL (Release x64)
-      run: msbuild TermWrap/TermWrap/TermWrap.vcxproj /p:Configuration=Release /p:Platform=x64
+      run: msbuild TermWrap/TermWrap/TermWrap.vcxproj /p:Configuration=Release /p:Platform=x64 /p:SolutionDir="${{ github.workspace }}\TermWrap\\"
 
     - name: Build UmWrap DLL (Release x64)
-      run: msbuild TermWrap/UmWrap/UmWrap.vcxproj /p:Configuration=Release /p:Platform=x64
+      run: msbuild TermWrap/UmWrap/UmWrap.vcxproj /p:Configuration=Release /p:Platform=x64 /p:SolutionDir="${{ github.workspace }}\TermWrap\\"
 
     - name: Copy Built DLLs to Resources
       run: |
