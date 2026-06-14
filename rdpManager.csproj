@@ -16,12 +16,12 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Reference Include="Interop.MSTSCLib">
-      <HintPath>Libs\Interop.MSTSCLib.dll</HintPath>
+    <Reference Include="MSTSCLib">
+      <HintPath>Libs\MSTSCLib.dll</HintPath>
       <Private>True</Private>
     </Reference>
-    <Reference Include="AxInterop.MSTSCLib">
-      <HintPath>Libs\AxInterop.MSTSCLib.dll</HintPath>
+    <Reference Include="AxMSTSCLib">
+      <HintPath>Libs\AxMSTSCLib.dll</HintPath>
       <Private>True</Private>
     </Reference>
   </ItemGroup>
