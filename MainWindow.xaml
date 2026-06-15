@@ -354,21 +354,44 @@
 
                                                 <!-- 卡片底部操作栏 -->
                                                 <Grid Grid.Row="2" Margin="0,12,0,0">
-                                                     <Grid.ColumnDefinitions>
-                                                         <ColumnDefinition Width="*"/>
-                                                         <ColumnDefinition Width="Auto"/>
-                                                     </Grid.ColumnDefinitions>
-                                                     <StackPanel Orientation="Horizontal" Grid.Column="0">
-                                                         <Button Content="打开会话标签" Style="{StaticResource VercelBlackButton}"
-                                                                 Tag="{Binding Id}" Click="OpenSessionTab_Click"/>
-                                                         <Button Content="删除" Style="{StaticResource VercelBorderButton}" Margin="8,0,0,0"
-                                                                 Foreground="#FF3366" BorderBrush="#FFCCD5"
-                                                                 Tag="{Binding Id}" Click="DeleteConnection_Click"/>
-                                                     </StackPanel>
-                                                     <Button Grid.Column="1" Content="断开并保活" Style="{StaticResource VercelBorderButton}"
-                                                             Tag="{Binding Id}" Click="KeepAliveDisconnect_Click"
-                                                             Visibility="{Binding ActiveActionsVisibility}"/>
-                                                </Grid>
+                                                      <Grid.ColumnDefinitions>
+                                                          <ColumnDefinition Width="*"/>
+                                                          <ColumnDefinition Width="Auto"/>
+                                                      </Grid.ColumnDefinitions>
+                                                      <StackPanel Orientation="Horizontal" Grid.Column="0">
+                                                          <Button Content="打开" Style="{StaticResource VercelBlackButton}"
+                                                                  Tag="{Binding Id}" Click="OpenSessionTab_Click" Margin="0,0,8,0"/>
+                                                          <StackPanel Orientation="Horizontal" Visibility="{Binding ActiveActionsVisibility}">
+                                                              <Button Content="断开保活" Style="{StaticResource VercelBorderButton}" Margin="0,0,8,0"
+                                                                      Tag="{Binding Id}" Click="KeepAliveDisconnect_Click"/>
+                                                              <Button Content="彻底断开" Style="{StaticResource VercelBorderButton}" Margin="0,0,8,0"
+                                                                      Foreground="#FF3366" BorderBrush="#FFCCD5"
+                                                                      Tag="{Binding Id}" Click="FullDisconnect_Click"/>
+                                                          </StackPanel>
+                                                      </StackPanel>
+                                                      
+                                                      <Button Grid.Column="1" Content="⋮" Style="{StaticResource VercelBorderButton}" Padding="8,0" FontSize="16" FontWeight="Bold" Background="Transparent" BorderThickness="0"
+                                                              HorizontalAlignment="Right">
+                                                          <Button.ContextMenu>
+                                                              <ContextMenu>
+                                                                  <MenuItem Header="删除" Tag="{Binding Id}" Click="DeleteConnection_Click" Foreground="#FF3366"/>
+                                                                  <MenuItem Header="设置" Tag="{Binding Id}"/>
+                                                              </ContextMenu>
+                                                          </Button.ContextMenu>
+                                                          <!-- Click event dynamically opens ContextMenu -->
+                                                          <Button.Triggers>
+                                                              <EventTrigger RoutedEvent="Button.Click">
+                                                                  <BeginStoryboard>
+                                                                      <Storyboard>
+                                                                          <BooleanAnimationUsingKeyFrames Storyboard.TargetProperty="ContextMenu.IsOpen">
+                                                                              <DiscreteBooleanKeyFrame KeyTime="0:0:0" Value="True"/>
+                                                                          </BooleanAnimationUsingKeyFrames>
+                                                                      </Storyboard>
+                                                                  </BeginStoryboard>
+                                                              </EventTrigger>
+                                                          </Button.Triggers>
+                                                      </Button>
+                                                 </Grid>
                                             </Grid>
                                         </Border>
                                     </DataTemplate>

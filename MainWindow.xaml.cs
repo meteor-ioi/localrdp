@@ -430,35 +430,27 @@ namespace rdpManager
 
         private void KeepAliveDisconnect_Click(object sender, RoutedEventArgs e)
         {
-            if (sender is Button btn && btn.Tag is string connId)
+            if (sender is FrameworkElement element && element.Tag is string connId)
             {
                 var connItem = _connections.FirstOrDefault(c => c.Id == connId);
                 if (connItem == null) return;
 
-                bool isTabOpen = false;
-                for (int i = 0; i < WorkspaceTabs.Items.Count; i++)
-                {
-                    if (WorkspaceTabs.Items[i] is TabItem t && t.Tag == connItem)
-                    {
-                        isTabOpen = true;
-                        break;
-                    }
-                }
+                CloseTabToKeepAlive(connItem);
+            }
+        }
 
-                if (isTabOpen)
+        private void FullDisconnect_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is FrameworkElement element && element.Tag is string connId)
+            {
+                var connItem = _connections.FirstOrDefault(c => c.Id == connId);
+                if (connItem == null) return;
+
+                var result = MessageBox.Show($"是否确定彻底断开会话 '{connItem.FriendlyName}'？这将清理该隔离账户下的所有执行进程。", "断开连接", MessageBoxButton.YesNo, MessageBoxImage.Question);
+                if (result == MessageBoxResult.Yes)
                 {
-                    // 若处于激活显示的标签页中，点击“断开并保活”即将该标签页关闭，置于后台静音渲染
-                    CloseTabToKeepAlive(connItem);
-                }
-                else
-                {
-                    // 若已处于后台保活状态下，点击则表明“彻底注销”断开连接并清理句柄
-                    var result = MessageBox.Show($"是否确定彻底断开会话 '{connItem.FriendlyName}'？这将清理该隔离账户下的所有执行进程。", "断开连接", MessageBoxButton.YesNo, MessageBoxImage.Question);
-                    if (result == MessageBoxResult.Yes)
-                    {
-                        Logger.LogInfo($"彻底注销会话并清理句柄: {connItem.FriendlyName}");
-                        connItem.RdpControl?.Disconnect();
-                    }
+                    Logger.LogInfo($"彻底注销会话并清理句柄: {connItem.FriendlyName}");
+                    connItem.RdpControl?.Disconnect();
                 }
             }
         }
@@ -871,7 +863,7 @@ namespace rdpManager
 
         private void DeleteConnection_Click(object sender, RoutedEventArgs e)
         {
-            if (sender is Button btn && btn.Tag is string connId)
+            if (sender is FrameworkElement element && element.Tag is string connId)
             {
                 var connItem = _connections.FirstOrDefault(c => c.Id == connId);
                 if (connItem == null) return;

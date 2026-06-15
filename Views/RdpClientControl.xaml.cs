@@ -138,9 +138,8 @@ namespace rdpManager.Views
             _rdpControl.Server = server;
             _rdpControl.UserName = username;
             
-            // 设置远程分辨率为 1920x1080，配合 SmartSizing 达到完美缩放效果
-            _rdpControl.DesktopWidth = 1920;
-            _rdpControl.DesktopHeight = 1080;
+            // 动态分辨率支持：移除静态高分辨率，避免在部分分辨率缩放异常导致白屏
+            // 依赖 SmartSizing 及 RDP 内部默认分辨率机制。
 
             // 设置密码 (通过 COM 接口转换设置明文密码)
             var advancedSettings = (IMsRdpClientAdvancedSettings)_rdpControl.AdvancedSettings;
