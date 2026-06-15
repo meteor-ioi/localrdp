@@ -1028,6 +1028,11 @@ namespace rdpManager
             }
         }
 
+        private void EditConnection_Click(object sender, RoutedEventArgs e)
+        {
+            MessageBox.Show("连接设置功能开发中...", "提示", MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+
         protected override void OnClosing(CancelEventArgs e)
         {
             if (_isExplicitExit)

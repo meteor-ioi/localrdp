@@ -101,9 +101,14 @@ namespace rdpManager.Views
                 {
                     Logger.LogInfo("检测到有缓存的连接请求，立即执行连接。");
                     _connectPending = false;
-                    Connect(_pendingServer!, _pendingUsername!, _pendingPassword!, 
-                        _pendingEnableUsb, _pendingEnableSmartSizing, _pendingEnableClipboard, _pendingMuteAudio,
-                        _pendingDesktopWidth, _pendingDesktopHeight, _pendingDesktopScaleFactor);
+                    
+                    // 延迟到布局完成后执行连接，确保 WinFormsHost 有实际宽高
+                    Dispatcher.InvokeAsync(() =>
+                    {
+                        Connect(_pendingServer!, _pendingUsername!, _pendingPassword!, 
+                            _pendingEnableUsb, _pendingEnableSmartSizing, _pendingEnableClipboard, _pendingMuteAudio,
+                            _pendingDesktopWidth, _pendingDesktopHeight, _pendingDesktopScaleFactor);
+                    }, System.Windows.Threading.DispatcherPriority.Loaded);
                 }
             }
             catch (Exception ex)
@@ -146,16 +151,33 @@ namespace rdpManager.Views
             _rdpControl.Server = server;
             _rdpControl.UserName = username;
             
-            // 设置分辨率
-            if (desktopWidth > 0 && desktopHeight > 0)
+            // 如果未指定分辨率，使用本机系统主屏幕分辨率作为远程桌面画布尺寸，配合 SmartSizing 适应控件
+            if (desktopWidth <= 0 || desktopHeight <= 0)
             {
-                _rdpControl.DesktopWidth = desktopWidth;
-                _rdpControl.DesktopHeight = desktopHeight;
+                desktopWidth = (int)SystemParameters.PrimaryScreenWidth;
+                desktopHeight = (int)SystemParameters.PrimaryScreenHeight;
             }
+
+            _rdpControl.DesktopWidth = desktopWidth;
+            _rdpControl.DesktopHeight = desktopHeight;
+            
+            // 明确指定颜色深度为 32 位，解决部分系统默认低色深导致的黑屏问题
+            _rdpControl.ColorDepth = 32;
 
             // 设置密码 (通过 COM 接口转换设置明文密码)
             var advancedSettings = (IMsRdpClientAdvancedSettings)_rdpControl.AdvancedSettings;
             advancedSettings.ClearTextPassword = password;
+
+            // 启用 CredSSP 支持 (避免本地环境因为 NLA 导致黑屏或闪退)
+            try
+            {
+                var advancedSettings7 = _rdpControl.AdvancedSettings as IMsRdpClientAdvancedSettings7;
+                if (advancedSettings7 != null)
+                {
+                    advancedSettings7.EnableCredSspSupport = true;
+                }
+            }
+            catch { }
 
             // RDP 基础优化配置
             var advancedSettings5 = (IMsRdpClientAdvancedSettings5)_rdpControl.AdvancedSettings;

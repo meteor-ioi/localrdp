@@ -371,11 +371,11 @@
                                                       </StackPanel>
                                                       
                                                       <Button Grid.Column="1" Content="⋮" Style="{StaticResource VercelBorderButton}" Padding="8,0" FontSize="16" FontWeight="Bold" Background="Transparent" BorderThickness="0"
-                                                              HorizontalAlignment="Right">
+                                                              HorizontalAlignment="Right" Tag="{Binding Id}">
                                                           <Button.ContextMenu>
                                                               <ContextMenu>
-                                                                  <MenuItem Header="删除" Tag="{Binding Id}" Click="DeleteConnection_Click" Foreground="#FF3366"/>
-                                                                  <MenuItem Header="设置" Tag="{Binding Id}"/>
+                                                                  <MenuItem Header="删除" Tag="{Binding PlacementTarget.Tag, RelativeSource={RelativeSource AncestorType=ContextMenu}}" Click="DeleteConnection_Click" Foreground="#FF3366"/>
+                                                                  <MenuItem Header="设置" Tag="{Binding PlacementTarget.Tag, RelativeSource={RelativeSource AncestorType=ContextMenu}}" Click="EditConnection_Click"/>
                                                               </ContextMenu>
                                                           </Button.ContextMenu>
                                                           <!-- Click event dynamically opens ContextMenu -->
