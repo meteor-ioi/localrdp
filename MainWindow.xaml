@@ -598,6 +598,34 @@
                         <TextBox x:Name="FriendlyNameTxt" Height="36" />
                     </StackPanel>
 
+                    <!-- 分辨率与缩放比设置 -->
+                    <Grid Margin="0,0,0,20">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="20"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0">
+                            <TextBlock Text="分辨率" FontSize="12" Foreground="#666666" Margin="0,0,0,6"/>
+                            <ComboBox x:Name="ResolutionCombo" Height="36" SelectionChanged="ResolutionCombo_SelectionChanged">
+                                <ComboBoxItem Content="自适应窗口大小" Tag="0x0"/>
+                                <ComboBoxItem Content="1920x1080" Tag="1920x1080"/>
+                                <ComboBoxItem Content="2560x1440" Tag="2560x1440"/>
+                                <ComboBoxItem Content="3840x2160" Tag="3840x2160"/>
+                            </ComboBox>
+                        </StackPanel>
+                        <StackPanel Grid.Column="2">
+                            <TextBlock Text="缩放比 (高清屏)" FontSize="12" Foreground="#666666" Margin="0,0,0,6"/>
+                            <ComboBox x:Name="ScaleFactorCombo" Height="36">
+                                <ComboBoxItem Content="100%" Tag="100"/>
+                                <ComboBoxItem Content="125%" Tag="125"/>
+                                <ComboBoxItem Content="150%" Tag="150"/>
+                                <ComboBoxItem Content="175%" Tag="175"/>
+                                <ComboBoxItem Content="200%" Tag="200"/>
+                            </ComboBox>
+                        </StackPanel>
+                    </Grid>
+
                     <!-- RPA 特有快捷选项 -->
                     <Border BorderBrush="#EAEAEA" BorderThickness="1" Background="#FAFAFA" CornerRadius="4" Padding="12" Margin="0,0,0,24">
                         <StackPanel>

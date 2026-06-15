@@ -397,7 +397,8 @@ namespace rdpManager
                         bool enableClipboard = OptClipboardChk.IsChecked == true;
                         bool muteAudio = OptMuteChk.IsChecked == true;
                         rdpCtrl.Connect(connItem.Server, connItem.Username, connItem.Password, 
-                            enableUsb, enableSmartSizing, enableClipboard, muteAudio);
+                            enableUsb, enableSmartSizing, enableClipboard, muteAudio,
+                            connItem.DesktopWidth, connItem.DesktopHeight, connItem.DesktopScaleFactor);
                     }
 
                     Logger.LogInfo("在 WorkspaceTabs 中创建并添加新的 TabItem 标签页。");
@@ -462,6 +463,53 @@ namespace rdpManager
             TargetPasswordBox.Password = string.Empty;
             FriendlyNameTxt.Text = string.Empty;
 
+            // 自动检测系统分辨率与缩放比
+            try
+            {
+                int scaleFactor = 100;
+                double dpiScale = 1.0;
+                var presentationSource = PresentationSource.FromVisual(this);
+                if (presentationSource != null)
+                {
+                    dpiScale = presentationSource.CompositionTarget.TransformToDevice.M11;
+                    scaleFactor = (int)Math.Round(dpiScale * 100);
+                }
+                
+                int physWidth = (int)Math.Round(SystemParameters.PrimaryScreenWidth * dpiScale);
+                int physHeight = (int)Math.Round(SystemParameters.PrimaryScreenHeight * dpiScale);
+                string resStr = $"{physWidth}x{physHeight}";
+
+                bool foundRes = false;
+                foreach (ComboBoxItem item in ResolutionCombo.Items)
+                {
+                    if (item.Tag?.ToString() == resStr)
+                    {
+                        ResolutionCombo.SelectedItem = item;
+                        foundRes = true;
+                        break;
+                    }
+                }
+                if (!foundRes)
+                {
+                    var newItem = new ComboBoxItem { Content = $"本机 ({resStr})", Tag = resStr };
+                    ResolutionCombo.Items.Add(newItem);
+                    ResolutionCombo.SelectedItem = newItem;
+                }
+
+                foreach (ComboBoxItem item in ScaleFactorCombo.Items)
+                {
+                    if (item.Tag?.ToString() == scaleFactor.ToString())
+                    {
+                        ScaleFactorCombo.SelectedItem = item;
+                        break;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError("自动检测分辨率失败", ex);
+            }
+
             TargetComputerCombo.Items.Clear();
             TargetComputerCombo.Items.Add("127.0.0.2");
 
@@ -495,6 +543,39 @@ namespace rdpManager
         private void CloseNewConnection_Click(object sender, RoutedEventArgs e)
         {
             NewConnectionOverlay.Visibility = Visibility.Collapsed;
+        }
+
+        private void ResolutionCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if (ScaleFactorCombo == null) return;
+            if (ResolutionCombo.SelectedItem is ComboBoxItem item && item.Tag is string resStr)
+            {
+                if (resStr == "0x0")
+                {
+                    // 自适应窗口，不强制缩放比
+                    ScaleFactorCombo.IsEnabled = false;
+                    return;
+                }
+
+                var parts = resStr.Split('x');
+                if (parts.Length == 2 && int.TryParse(parts[0], out int width))
+                {
+                    // 宽度 >= 1920 (1080p) 则激活缩放比下拉框
+                    ScaleFactorCombo.IsEnabled = width >= 1920;
+                    if (!ScaleFactorCombo.IsEnabled)
+                    {
+                        // 非高分屏默认 100%
+                        foreach (ComboBoxItem scaleItem in ScaleFactorCombo.Items)
+                        {
+                            if (scaleItem.Tag?.ToString() == "100")
+                            {
+                                ScaleFactorCombo.SelectedItem = scaleItem;
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
         }
 
         private void AddConnectionSubmit_Click(object sender, RoutedEventArgs e)
@@ -554,13 +635,34 @@ namespace rdpManager
                 friendlyName = $"{username} ({server})";
             }
 
+            int desktopWidth = 0;
+            int desktopHeight = 0;
+            if (ResolutionCombo.SelectedItem is ComboBoxItem resItem && resItem.Tag is string resTag)
+            {
+                if (resTag != "0x0" && resTag.Contains("x"))
+                {
+                    var parts = resTag.Split('x');
+                    int.TryParse(parts[0], out desktopWidth);
+                    int.TryParse(parts[1], out desktopHeight);
+                }
+            }
+
+            int scaleFactor = 100;
+            if (ScaleFactorCombo.IsEnabled && ScaleFactorCombo.SelectedItem is ComboBoxItem scaleItem && scaleItem.Tag is string scaleTag)
+            {
+                int.TryParse(scaleTag, out scaleFactor);
+            }
+
             var newItem = new ConnectionItem
             {
                 Id = Guid.NewGuid().ToString(),
                 FriendlyName = friendlyName,
                 Server = server,
                 Username = username,
-                Password = password
+                Password = password,
+                DesktopWidth = desktopWidth,
+                DesktopHeight = desktopHeight,
+                DesktopScaleFactor = scaleFactor
             };
 
             _connections.Add(newItem);
@@ -978,6 +1080,10 @@ namespace rdpManager
         public string FriendlyName { get; set; } = string.Empty;
         public string Server { get; set; } = string.Empty;
         public string Username { get; set; } = string.Empty;
+
+        public int DesktopWidth { get; set; } = 0;
+        public int DesktopHeight { get; set; } = 0;
+        public int DesktopScaleFactor { get; set; } = 100;
 
         [System.Text.Json.Serialization.JsonIgnore]
         public string Password { get; set; } = string.Empty;

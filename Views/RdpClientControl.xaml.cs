@@ -54,6 +54,9 @@ namespace rdpManager.Views
         private bool _pendingEnableSmartSizing;
         private bool _pendingEnableClipboard;
         private bool _pendingMuteAudio;
+        private int _pendingDesktopWidth;
+        private int _pendingDesktopHeight;
+        private int _pendingDesktopScaleFactor;
         private bool _connectPending = false;
 
         public RdpClientControl()
@@ -99,7 +102,8 @@ namespace rdpManager.Views
                     Logger.LogInfo("检测到有缓存的连接请求，立即执行连接。");
                     _connectPending = false;
                     Connect(_pendingServer!, _pendingUsername!, _pendingPassword!, 
-                        _pendingEnableUsb, _pendingEnableSmartSizing, _pendingEnableClipboard, _pendingMuteAudio);
+                        _pendingEnableUsb, _pendingEnableSmartSizing, _pendingEnableClipboard, _pendingMuteAudio,
+                        _pendingDesktopWidth, _pendingDesktopHeight, _pendingDesktopScaleFactor);
                 }
             }
             catch (Exception ex)
@@ -114,7 +118,8 @@ namespace rdpManager.Views
         /// </summary>
         public void Connect(string server, string username, string password, 
             bool enableUsb = false, bool enableSmartSizing = true, 
-            bool enableClipboard = true, bool muteAudio = true)
+            bool enableClipboard = true, bool muteAudio = true,
+            int desktopWidth = 0, int desktopHeight = 0, int desktopScaleFactor = 100)
         {
             Logger.LogInfo($"RdpClientControl.Connect() 被调用: Server={server}, Username={username}, EnableUsb={enableUsb}, EnableSmartSizing={enableSmartSizing}, EnableClipboard={enableClipboard}, MuteAudio={muteAudio}");
             if (_rdpControl == null)
@@ -127,6 +132,9 @@ namespace rdpManager.Views
                 _pendingEnableSmartSizing = enableSmartSizing;
                 _pendingEnableClipboard = enableClipboard;
                 _pendingMuteAudio = muteAudio;
+                _pendingDesktopWidth = desktopWidth;
+                _pendingDesktopHeight = desktopHeight;
+                _pendingDesktopScaleFactor = desktopScaleFactor;
                 _connectPending = true;
                 return;
             }
@@ -138,8 +146,12 @@ namespace rdpManager.Views
             _rdpControl.Server = server;
             _rdpControl.UserName = username;
             
-            // 动态分辨率支持：移除静态高分辨率，避免在部分分辨率缩放异常导致白屏
-            // 依赖 SmartSizing 及 RDP 内部默认分辨率机制。
+            // 设置分辨率
+            if (desktopWidth > 0 && desktopHeight > 0)
+            {
+                _rdpControl.DesktopWidth = desktopWidth;
+                _rdpControl.DesktopHeight = desktopHeight;
+            }
 
             // 设置密码 (通过 COM 接口转换设置明文密码)
             var advancedSettings = (IMsRdpClientAdvancedSettings)_rdpControl.AdvancedSettings;
@@ -151,6 +163,22 @@ namespace rdpManager.Views
             advancedSettings5.RedirectClipboard = enableClipboard; // 启用双向剪贴板
             advancedSettings5.RedirectPrinters = false; // 禁用打印机重定向以优化速度
             advancedSettings5.RedirectSmartCards = false;
+
+            // 应用 DPI 缩放配置 (需要高级接口或动态绑定以兼容旧系统)
+            if (desktopScaleFactor > 100)
+            {
+                try
+                {
+                    dynamic advancedSettingsDynamic = _rdpControl.AdvancedSettings;
+                    advancedSettingsDynamic.DesktopScaleFactor = (uint)desktopScaleFactor;
+                    advancedSettingsDynamic.DeviceScaleFactor = 100u; // 通常设备缩放比为 100%，以保证界面元素不会过小
+                    Logger.LogInfo($"已注入 DPI 缩放比: {desktopScaleFactor}%");
+                }
+                catch (Exception ex)
+                {
+                    Logger.LogWarning($"当前 RDP 客户端版本不支持自定义缩放比，将忽略缩放设置: {ex.Message}");
+                }
+            }
 
             // 音频优化：1 = 不在本地播放音频（完全静音运行，节省 CPU 开销）
             if (_rdpControl.SecuredSettings != null)
