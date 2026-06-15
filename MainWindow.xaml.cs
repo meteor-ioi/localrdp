@@ -870,26 +870,7 @@ namespace rdpManager
             try
             {
                 _notifyIcon = new System.Windows.Forms.NotifyIcon();
-                
-                try
-                {
-                    var iconUri = new Uri("pack://application:,,,/icon.ico", UriKind.RelativeOrAbsolute);
-                    var streamInfo = System.Windows.Application.GetResourceStream(iconUri);
-                    if (streamInfo != null)
-                    {
-                        _notifyIcon.Icon = new System.Drawing.Icon(streamInfo.Stream);
-                    }
-                    else
-                    {
-                        _notifyIcon.Icon = System.Drawing.SystemIcons.Application;
-                    }
-                }
-                catch (Exception ex)
-                {
-                    Logger.LogError("无法从 pack 资源加载托盘图标，使用默认图标", ex);
-                    _notifyIcon.Icon = System.Drawing.SystemIcons.Application;
-                }
-
+                _notifyIcon.Icon = System.Drawing.SystemIcons.Application;
                 _notifyIcon.Text = "RDP Manager - RPA 隔离桌面管理器";
                 _notifyIcon.Visible = true;
                 _notifyIcon.DoubleClick += (s, args) =>

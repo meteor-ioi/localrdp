@@ -6,8 +6,7 @@
         xmlns:local="clr-namespace:rdpManager"
         mc:Ignorable="d"
         Title="RDP Manager - RPA 隔离桌面管理器" Height="700" Width="1100"
-        WindowStartupLocation="CenterScreen" Background="#FFFFFF"
-        Icon="icon.ico">
+        WindowStartupLocation="CenterScreen" Background="#FFFFFF">
 
     <!-- 局部资源与控制样式定义 (Vercel 风格) -->
     <Window.Resources>
