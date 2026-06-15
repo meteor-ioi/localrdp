@@ -42,7 +42,7 @@ namespace rdpManager.Helpers
                         newUser.CommitChanges();
 
                         // 设置密码永不过期 (UF_DONT_EXPIRE_PASSWORD = 0x10000)
-                        int flags = (int)newUser.Properties["UserFlags"].Value;
+                        int flags = newUser.Properties["UserFlags"].Value as int? ?? 0;
                         newUser.Properties["UserFlags"].Value = flags | 0x10000;
                         newUser.CommitChanges();
 
@@ -179,7 +179,7 @@ namespace rdpManager.Helpers
 
                                 using (DirectoryEntry group = new DirectoryEntry($"WinNT://{Environment.MachineName}/{adminGroupName},group"))
                                 {
-                                    if ((bool)group.Invoke("IsMember", new object[] { child.Path }))
+                                    if (group.Invoke("IsMember", new object[] { child.Path }) is bool isMember && isMember)
                                     {
                                         type = "管理员";
                                     }

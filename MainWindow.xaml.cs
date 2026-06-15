@@ -71,17 +71,17 @@ namespace rdpManager
             {
                 if (isRunning)
                 {
-                    StatusDot.Fill = (Brush)new BrushConverter().ConvertFromString("#0070F3"); // Vercel 经典蓝色
+                    StatusDot.Fill = (Brush?)new BrushConverter().ConvertFromString("#0070F3") ?? Brushes.Blue; // Vercel 经典蓝色
                     StatusTxt.Text = "并发会话已激活 (TermWrap)";
                     TermWrapStatusTxt.Text = "已激活 (服务已劫持并运行中)";
-                    TermWrapStatusTxt.Foreground = (Brush)new BrushConverter().ConvertFromString("#0070F3");
+                    TermWrapStatusTxt.Foreground = (Brush?)new BrushConverter().ConvertFromString("#0070F3") ?? Brushes.Blue;
                 }
                 else
                 {
-                    StatusDot.Fill = (Brush)new BrushConverter().ConvertFromString("#F5A623"); // 警告橙色
+                    StatusDot.Fill = (Brush?)new BrushConverter().ConvertFromString("#F5A623") ?? Brushes.Orange; // 警告橙色
                     StatusTxt.Text = "并发会话已激活，但远程服务已停止";
                     TermWrapStatusTxt.Text = "已激活 (但服务当前已停止)";
-                    TermWrapStatusTxt.Foreground = (Brush)new BrushConverter().ConvertFromString("#F5A623");
+                    TermWrapStatusTxt.Foreground = (Brush?)new BrushConverter().ConvertFromString("#F5A623") ?? Brushes.Orange;
                 }
             }
             else
@@ -343,7 +343,7 @@ namespace rdpManager
                             Dispatcher.Invoke(() =>
                             {
                                 connItem.StatusText = "已连接";
-                                connItem.StatusBrush = (Brush)new BrushConverter().ConvertFromString("#0070F3");
+                                connItem.StatusBrush = (Brush?)new BrushConverter().ConvertFromString("#0070F3") ?? Brushes.Blue;
                                 connItem.ActiveActionsVisibility = Visibility.Visible;
                                 connItem.PlaceholderVisibility = Visibility.Collapsed;
                                 connItem.Thumbnail = rdpCtrl.CaptureThumbnail();
