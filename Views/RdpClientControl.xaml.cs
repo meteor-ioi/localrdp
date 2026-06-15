@@ -149,11 +149,17 @@ namespace rdpManager.Views
             _rdpControl.Server = server;
             _rdpControl.UserName = username;
             
-            // 只有当指定了具体分辨率时才设置尺寸，自适应（<= 0）时不设置，从而采用默认 RDP 分辨率（像 458768e 一样）
             if (desktopWidth > 0 && desktopHeight > 0)
             {
                 _rdpControl.DesktopWidth = desktopWidth;
                 _rdpControl.DesktopHeight = desktopHeight;
+            }
+            else
+            {
+                var (w, h) = GetAdaptiveResolution();
+                _rdpControl.DesktopWidth = w;
+                _rdpControl.DesktopHeight = h;
+                Logger.LogInfo($"自适应模式: 远程桌面分辨率设为 {w}x{h}");
             }
 
             // 设置密码 (通过 COM 接口转换设置明文密码)
@@ -208,6 +214,28 @@ namespace rdpManager.Views
                     // 忽略断开异常
                 }
             }
+        }
+
+        /// <summary>
+        /// 获取自适应模式下的远程桌面分辨率（物理像素）
+        /// </summary>
+        private (int Width, int Height) GetAdaptiveResolution()
+        {
+            double dpiScale = 1.0;
+            var ps = PresentationSource.FromVisual(this);
+            if (ps != null)
+                dpiScale = ps.CompositionTarget.TransformToDevice.M11;
+
+            if (this.ActualWidth > 10 && this.ActualHeight > 10)
+            {
+                int w = (int)Math.Round(this.ActualWidth * dpiScale);
+                int h = (int)Math.Round(this.ActualHeight * dpiScale);
+                return (w, h);
+            }
+
+            int sw = (int)Math.Round(SystemParameters.PrimaryScreenWidth * dpiScale);
+            int sh = (int)Math.Round(SystemParameters.PrimaryScreenHeight * dpiScale);
+            return (sw, sh);
         }
 
         /// <summary>
