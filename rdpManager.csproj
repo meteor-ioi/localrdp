@@ -13,7 +13,6 @@
     <PublishSingleFile>true</PublishSingleFile>
     <SelfContained>false</SelfContained>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
-    <ApplicationIcon>icon.ico</ApplicationIcon>
   </PropertyGroup>
 
   <ItemGroup>
@@ -36,10 +35,6 @@
     <EmbeddedResource Include="Resources\TermWrap.dll" />
     <EmbeddedResource Include="Resources\UmWrap.dll" />
     <EmbeddedResource Include="Resources\Zydis.dll" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <Resource Include="icon.ico" />
   </ItemGroup>
 
 </Project>
