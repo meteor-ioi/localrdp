@@ -458,11 +458,11 @@
                                         <DataTemplate>
                                             <Grid>
                                                 <Grid.ColumnDefinitions>
-                                                    <Grid.ColumnDefinition Width="2*"/>
-                                                    <Grid.ColumnDefinition Width="1.5*"/>
-                                                    <Grid.ColumnDefinition Width="1.5*"/>
-                                                    <Grid.ColumnDefinition Width="2*"/>
-                                                    <Grid.ColumnDefinition Width="3*"/>
+                                                    <ColumnDefinition Width="2*"/>
+                                                    <ColumnDefinition Width="1.5*"/>
+                                                    <ColumnDefinition Width="1.5*"/>
+                                                    <ColumnDefinition Width="2*"/>
+                                                    <ColumnDefinition Width="3*"/>
                                                 </Grid.ColumnDefinitions>
                                                 
                                                 <!-- 用户名 -->
