@@ -469,8 +469,8 @@
                         <Expander.Header>
                             <Grid Width="330">
                                 <Grid.ColumnDefinitions>
-                                    <Grid.ColumnDefinition Width="*"/>
-                                    <Grid.ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
                                 </Grid.ColumnDefinitions>
                                 <StackPanel Orientation="Horizontal">
                                     <TextBlock Text="📝" FontSize="12" Margin="0,0,6,0"/>
