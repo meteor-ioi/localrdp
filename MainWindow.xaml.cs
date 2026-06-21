@@ -36,6 +36,193 @@ namespace rdpManager
         private const uint ES_SYSTEM_REQUIRED = 0x00000001;
         private const uint ES_DISPLAY_REQUIRED = 0x00000002;
 
+        // Win32 API 辅助方法，用于保活断开时隐藏 RDP 窗口，恢复连接时显示
+        [DllImport("user32.dll")]
+        private static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+
+        [DllImport("user32.dll")]
+        private static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint lpdwProcessId);
+
+        [DllImport("user32.dll")]
+        private static extern bool EnumWindows(EnumWindowsProc lpEnumFunc, IntPtr lParam);
+
+        private delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
+
+        private const int SW_HIDE = 0;
+        private const int SW_SHOW = 5;
+
+        private class RdpSessionProcess
+        {
+            public string Username { get; set; } = string.Empty;
+            public Process Process { get; set; }
+            public bool IsHidden { get; set; }
+        }
+
+        private readonly List<RdpSessionProcess> _rdpProcesses = new List<RdpSessionProcess>();
+
+        private static List<IntPtr> GetWindowHandlesByPid(int pid)
+        {
+            var windowHandles = new List<IntPtr>();
+            try
+            {
+                EnumWindows((hWnd, lParam) =>
+                {
+                    GetWindowThreadProcessId(hWnd, out uint processId);
+                    if (processId == pid)
+                    {
+                        windowHandles.Add(hWnd);
+                    }
+                    return true;
+                }, IntPtr.Zero);
+            }
+            catch { }
+            return windowHandles;
+        }
+
+        private string GetCommandLineOfProcess(int pid)
+        {
+            try
+            {
+                var psi = new ProcessStartInfo("wmic", $"process where ProcessId={pid} get CommandLine")
+                {
+                    RedirectStandardOutput = true,
+                    UseShellExecute = false,
+                    CreateNoWindow = true
+                };
+                using (var proc = Process.Start(psi))
+                {
+                    if (proc != null)
+                    {
+                        string output = proc.StandardOutput.ReadToEnd();
+                        proc.WaitForExit(1000);
+                        return output;
+                    }
+                }
+            }
+            catch { }
+            return "";
+        }
+
+        private Process? FindMstscProcessForUser(string username)
+        {
+            try
+            {
+                var procs = Process.GetProcessesByName("mstsc");
+                foreach (var p in procs)
+                {
+                    try
+                    {
+                        string cmdline = GetCommandLineOfProcess(p.Id);
+                        if (cmdline.Contains($"rdp_connection_{username}.rdp") || cmdline.Contains($"rdp_connection_{username}"))
+                        {
+                            return p;
+                        }
+                    }
+                    catch { }
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.LogWarning($"查找用户 '{username}' 的 mstsc 进程失败: {ex.Message}");
+            }
+            return null;
+        }
+
+        private void ApplyRdpClientKeepAliveRegistry()
+        {
+            try
+            {
+                using (var key = Microsoft.Win32.Registry.CurrentUser.CreateSubKey(@"Software\Microsoft\Terminal Server Client", true))
+                {
+                    key.SetValue("RemoteDesktopServicesSessionByProtocol", 1, Microsoft.Win32.RegistryValueKind.DWord);
+                }
+                Logger.LogInfo("已应用本地客户端后台保活注册表优化(RemoteDesktopServicesSessionByProtocol=1)。");
+            }
+            catch (Exception ex)
+            {
+                Logger.LogWarning($"应用本地客户端保活注册表优化失败: {ex.Message}");
+            }
+        }
+
+        private bool IsSessionActive(string username)
+        {
+            if (ListSessions.ItemsSource is IEnumerable<SessionItem> items)
+            {
+                var item = items.FirstOrDefault(i => i.Username.Equals(username, StringComparison.OrdinalIgnoreCase));
+                if (item != null)
+                {
+                    return item.StateText.Contains("活跃");
+                }
+            }
+            return false;
+        }
+
+        private bool TryShowExistingRdpWindow(string username)
+        {
+            lock (_rdpProcesses)
+            {
+                _rdpProcesses.RemoveAll(p => p.Process.HasExited);
+
+                var rdpProc = _rdpProcesses.FirstOrDefault(p => p.Username.Equals(username, StringComparison.OrdinalIgnoreCase));
+                if (rdpProc == null)
+                {
+                    var extProc = FindMstscProcessForUser(username);
+                    if (extProc != null)
+                    {
+                        rdpProc = new RdpSessionProcess
+                        {
+                            Username = username,
+                            Process = extProc,
+                            IsHidden = true
+                        };
+                        _rdpProcesses.Add(rdpProc);
+                    }
+                }
+
+                if (rdpProc != null && !rdpProc.Process.HasExited)
+                {
+                    var hwnds = GetWindowHandlesByPid(rdpProc.Process.Id);
+                    if (hwnds.Count > 0)
+                    {
+                        foreach (var hwnd in hwnds)
+                        {
+                            ShowWindow(hwnd, SW_SHOW);
+                        }
+                        rdpProc.IsHidden = false;
+                        Logger.LogInfo($"已从后台恢复并显示用户 '{username}' 的 RDP 窗口。");
+                        return true;
+                    }
+                }
+            }
+            return false;
+        }
+
+        private void KillExistingMstscProcessForUser(string username)
+        {
+            lock (_rdpProcesses)
+            {
+                var rdpProc = _rdpProcesses.FirstOrDefault(p => p.Username.Equals(username, StringComparison.OrdinalIgnoreCase));
+                if (rdpProc != null)
+                {
+                    try
+                    {
+                        if (!rdpProc.Process.HasExited)
+                        {
+                            rdpProc.Process.Kill();
+                        }
+                    }
+                    catch { }
+                    _rdpProcesses.Remove(rdpProc);
+                }
+            }
+
+            var externalProc = FindMstscProcessForUser(username);
+            if (externalProc != null)
+            {
+                try { externalProc.Kill(); } catch { }
+            }
+        }
+
         public MainWindow()
         {
             InitializeComponent();
@@ -64,6 +251,9 @@ namespace rdpManager
 
             // 应用主机级阻止休眠策略
             ApplySleepPrevention();
+
+            // 应用本地客户端后台保活注册表优化
+            ApplyRdpClientKeepAliveRegistry();
 
             // 在后台应用系统凭据分配和会话重连策略 (修复单用户多会话的遗留设置)
             Task.Run(() => TermWrapDeployer.ApplyCredentialsDelegationPolicies());
@@ -710,95 +900,143 @@ namespace rdpManager
             if (sender is Button btn && btn.Tag is int sessionId)
             {
                 bool keepResolution = ChkKeepResolution.IsChecked == true;
-                Logger.LogInfo($"正在尝试将系统 RDP 会话 {sessionId} {(keepResolution ? "保活断开" : "断开挂起")}...");
+                string username = "";
+                if (ListSessions.ItemsSource is IEnumerable<SessionItem> items)
+                {
+                    var item = items.FirstOrDefault(i => i.SessionId == sessionId);
+                    if (item != null)
+                    {
+                        username = item.Username;
+                    }
+                }
+
+                Logger.LogInfo($"正在尝试将系统 RDP 会话 {sessionId} (用户: {username}) {(keepResolution ? "保活断开" : "断开挂起")}...");
                 try
                 {
                     if (keepResolution)
                     {
-                        // 1. 先正常断开会话，确保远程窗口关闭
-                        var tsdisconPsi = new ProcessStartInfo("tsdiscon", sessionId.ToString())
+                        // 1. 优先尝试寻找本地的 RDP 客户端窗口进程并将其隐藏，保留其在后台活动并继续进行 GPU 渲染，不打扰当前物理控制台。
+                        Process? mstscProc = null;
+                        lock (_rdpProcesses)
                         {
-                            UseShellExecute = false,
-                            CreateNoWindow = true
-                        };
-                        using (var proc = Process.Start(tsdisconPsi))
-                        {
-                            proc?.WaitForExit(3000);
+                            _rdpProcesses.RemoveAll(p => p.Process.HasExited);
+                            var match = _rdpProcesses.FirstOrDefault(p => p.Username.Equals(username, StringComparison.OrdinalIgnoreCase));
+                            if (match != null) mstscProc = match.Process;
                         }
 
-                        // 尝试清理本地 mstsc 进程以避免弹窗
-                        try
+                        if (mstscProc == null)
                         {
-                            var killMstscPsi = new ProcessStartInfo("powershell", "-NoProfile -WindowStyle Hidden -Command \"Get-WmiObject Win32_Process -Filter \\\"Name='mstsc.exe'\\\" | Where-Object { $_.CommandLine -match 'rdp_connection_' } | Stop-Process -Force\"")
+                            mstscProc = FindMstscProcessForUser(username);
+                        }
+
+                        bool hiddenSuccess = false;
+                        if (mstscProc != null && !mstscProc.HasExited)
+                        {
+                            var hwnds = GetWindowHandlesByPid(mstscProc.Id);
+                            if (hwnds.Count > 0)
+                            {
+                                foreach (var hwnd in hwnds)
+                                {
+                                    ShowWindow(hwnd, SW_HIDE);
+                                }
+                                lock (_rdpProcesses)
+                                {
+                                    var match = _rdpProcesses.FirstOrDefault(p => p.Username.Equals(username, StringComparison.OrdinalIgnoreCase));
+                                    if (match != null)
+                                    {
+                                        match.IsHidden = true;
+                                    }
+                                    else
+                                    {
+                                        _rdpProcesses.Add(new RdpSessionProcess
+                                        {
+                                            Username = username,
+                                            Process = mstscProc,
+                                            IsHidden = true
+                                        });
+                                    }
+                                }
+                                hiddenSuccess = true;
+                                Logger.LogInfo($"已成功隐藏用户 '{username}' 的远程桌面窗口进行后台保活。当前物理控制台 A 未受任何影响。");
+                            }
+                        }
+
+                        // 2. 如果未能在本地查找到可隐藏的 RDP 窗口进程，则执行 fallback 降级机制：重定向到物理控制台
+                        if (!hiddenSuccess)
+                        {
+                            Logger.LogInfo($"未检测到本地可用的客户端窗口进程，正在执行降级保活机制 (重定向至物理控制台)...");
+
+                            // 先正常断开，防止阻塞
+                            var tsdisconPsi = new ProcessStartInfo("tsdiscon", sessionId.ToString())
                             {
                                 UseShellExecute = false,
                                 CreateNoWindow = true
                             };
-                            Process.Start(killMstscPsi)?.WaitForExit(2000);
-                        }
-                        catch { }
-
-                        // 2. 将会话重定向回物理控制台（确保物理显卡继续渲染）
-                        // 注意：tscon 必须以 SYSTEM 权限运行才能免密码强制重定向
-                        string taskName = "RdpKeepAliveTask_" + Guid.NewGuid().ToString("N");
-                        string cmd = $"tscon {sessionId} /dest:console";
-                        
-                        var createPsi = new ProcessStartInfo("schtasks", $"/create /ru \"SYSTEM\" /sc once /st 00:00 /tn \"{taskName}\" /tr \"{cmd}\" /f") { CreateNoWindow = true, UseShellExecute = false };
-                        Process.Start(createPsi)?.WaitForExit(3000);
-
-                        var runPsi = new ProcessStartInfo("schtasks", $"/run /tn \"{taskName}\"") { CreateNoWindow = true, UseShellExecute = false };
-                        Process.Start(runPsi)?.WaitForExit(3000);
-
-                        var deletePsi = new ProcessStartInfo("schtasks", $"/delete /tn \"{taskName}\" /f") { CreateNoWindow = true, UseShellExecute = false };
-                        Process.Start(deletePsi)?.WaitForExit(3000);
-
-                        Logger.LogInfo($"已发送 RDP 会话 {sessionId} 重定向至 Console 指令 (SYSTEM 权限)。");
-
-                        // 3. 获取目标分辨率并执行 PowerShell 调整活动控制台分辨率
-                        int width = 1920;
-                        int height = 1080;
-                        if (ComboResolution.SelectedItem is ComboBoxItem resItem && resItem.Tag is string resTag)
-                        {
-                            if (resTag != "0x0" && resTag.Contains("x"))
+                            using (var proc = Process.Start(tsdisconPsi))
                             {
-                                var parts = resTag.Split('x');
-                                if (parts.Length == 2 && int.TryParse(parts[0], out int w) && int.TryParse(parts[1], out int h))
+                                proc?.WaitForExit(3000);
+                            }
+
+                            // SYSTEM 权限重定向
+                            string taskName = "RdpKeepAliveTask_" + Guid.NewGuid().ToString("N");
+                            string cmd = $"tscon {sessionId} /dest:console";
+                            
+                            var createPsi = new ProcessStartInfo("schtasks", $"/create /ru \"SYSTEM\" /sc once /st 00:00 /tn \"{taskName}\" /tr \"{cmd}\" /f") { CreateNoWindow = true, UseShellExecute = false };
+                            Process.Start(createPsi)?.WaitForExit(3000);
+
+                            var runPsi = new ProcessStartInfo("schtasks", $"/run /tn \"{taskName}\"") { CreateNoWindow = true, UseShellExecute = false };
+                            Process.Start(runPsi)?.WaitForExit(3000);
+
+                            var deletePsi = new ProcessStartInfo("schtasks", $"/delete /tn \"{taskName}\" /f") { CreateNoWindow = true, UseShellExecute = false };
+                            Process.Start(deletePsi)?.WaitForExit(3000);
+
+                            Logger.LogInfo($"已发送 RDP 会话 {sessionId} 重定向至 Console 指令 (SYSTEM 权限)。");
+
+                            // 获取目标分辨率并执行 PowerShell 调整活动控制台分辨率
+                            int width = 1920;
+                            int height = 1080;
+                            if (ComboResolution.SelectedItem is ComboBoxItem resItem && resItem.Tag is string resTag)
+                            {
+                                if (resTag != "0x0" && resTag.Contains("x"))
                                 {
-                                    width = w;
-                                    height = h;
+                                    var parts = resTag.Split('x');
+                                    if (parts.Length == 2 && int.TryParse(parts[0], out int w) && int.TryParse(parts[1], out int h))
+                                    {
+                                        width = w;
+                                        height = h;
+                                    }
                                 }
                             }
-                        }
 
-                        // 3. 延时 1.5 秒确保重定向完成，然后后台非阻塞调用 PowerShell 脚本更改分辨率
-                        Task.Run(async () =>
-                        {
-                            await Task.Delay(1500);
-                            try
+                            Task.Run(async () =>
                             {
-                                Logger.LogInfo($"正在为物理控制台强制锁定分辨率为: {width}x{height}...");
-                                string psCommand = $"try {{ Set-DisplayResolution -Width {width} -Height {height} -Force -ErrorAction Stop }} catch {{ " +
-                                                   $"$code = 'using System; using System.Runtime.InteropServices; [StructLayout(LayoutKind.Sequential)] public struct DEVMODE {{ [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 32)] public string dmDeviceName; public short dmSpecVersion; public short dmDriverVersion; public short dmSize; public short dmDriverExtra; public int dmFields; public int dmPositionX; public int dmPositionY; public int dmDisplayOrientation; public int dmDisplayFixedOutput; public short dmColor; public short dmDuplex; public short dmYResolution; public short dmTTOption; public short dmCollate; [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 32)] public string dmFormName; public short dmLogPixels; public short dmBitsPerPel; public int dmPelsWidth; public int dmPelsHeight; public int dmDisplayFlags; public int dmNup; public int dmDisplayFrequency; }} public class Display {{ [DllImport(\"user32.dll\")] public static extern int ChangeDisplaySettings(ref DEVMODE devMode, int flags); }}'; " +
-                                                   $"Add-Type -TypeDefinition $code -ErrorAction SilentlyContinue; " +
-                                                   $"$devmode = New-Object DEVMODE; $devmode.dmSize = [System.Runtime.InteropServices.Marshal]::SizeOf($devmode); $devmode.dmFields = 0x00080000 -bor 0x00100000; $devmode.dmPelsWidth = {width}; $devmode.dmPelsHeight = {height}; " +
-                                                   $"[Display]::ChangeDisplaySettings([ref]$devmode, 0) }}";
+                                await Task.Delay(1500);
+                                try
+                                {
+                                    Logger.LogInfo($"正在为物理控制台强制锁定分辨率为: {width}x{height}...");
+                                    string psCommand = $"try {{ Set-DisplayResolution -Width {width} -Height {height} -Force -ErrorAction Stop }} catch {{ " +
+                                                       $"$code = 'using System; using System.Runtime.InteropServices; [StructLayout(LayoutKind.Sequential)] public struct DEVMODE {{ [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 32)] public string dmDeviceName; public short dmSpecVersion; public short dmDriverVersion; public short dmSize; public short dmDriverExtra; public int dmFields; public int dmPositionX; public int dmPositionY; public int dmDisplayOrientation; public int dmDisplayFixedOutput; public short dmColor; public short dmDuplex; public short dmYResolution; public short dmTTOption; public short dmCollate; [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 32)] public string dmFormName; public short dmLogPixels; public short dmBitsPerPel; public int dmPelsWidth; public int dmPelsHeight; public int dmDisplayFlags; public int dmNup; public int dmDisplayFrequency; }} public class Display {{ [DllImport(\"user32.dll\")] public static extern int ChangeDisplaySettings(ref DEVMODE devMode, int flags); }}'; " +
+                                                       $"Add-Type -TypeDefinition $code -ErrorAction SilentlyContinue; " +
+                                                       $"$devmode = New-Object DEVMODE; $devmode.dmSize = [System.Runtime.InteropServices.Marshal]::SizeOf($devmode); $devmode.dmFields = 0x00080000 -bor 0x00100000; $devmode.dmPelsWidth = {width}; $devmode.dmPelsHeight = {height}; " +
+                                                       $"[Display]::ChangeDisplaySettings([ref]$devmode, 0) }}";
 
-                                var psPsi = new ProcessStartInfo("powershell", $"-NoProfile -WindowStyle Hidden -Command \"{psCommand}\"")
-                                {
-                                    UseShellExecute = false,
-                                    CreateNoWindow = true
-                                };
-                                using (var psProc = Process.Start(psPsi))
-                                {
-                                    psProc?.WaitForExit(5000);
+                                    var psPsi = new ProcessStartInfo("powershell", $"-NoProfile -WindowStyle Hidden -Command \"{psCommand}\"")
+                                    {
+                                        UseShellExecute = false,
+                                        CreateNoWindow = true
+                                    };
+                                    using (var psProc = Process.Start(psPsi))
+                                    {
+                                        psProc?.WaitForExit(5000);
+                                    }
+                                    Logger.LogInfo($"物理控制台分辨率恢复指令已执行完毕。");
                                 }
-                                Logger.LogInfo($"物理控制台分辨率恢复指令已执行完毕。");
-                            }
-                            catch (Exception ex)
-                            {
-                                Logger.LogWarning($"执行分辨率恢复脚本失败: {ex.Message}");
-                            }
-                        });
+                                catch (Exception ex)
+                                {
+                                    Logger.LogWarning($"执行分辨率恢复脚本失败: {ex.Message}");
+                                }
+                            });
+                        }
                     }
                     else
                     {
@@ -812,7 +1050,10 @@ namespace rdpManager
                         {
                             proc?.WaitForExit(3000);
                         }
-                        Logger.LogInfo($"已发送 RDP 会话 {sessionId} 普通挂起指令。");
+
+                        // 既然是普通挂起，也要关闭本地客户端
+                        KillExistingMstscProcessForUser(username);
+                        Logger.LogInfo($"已发送 RDP 会话 {sessionId} 普通挂起指令，并清理本地窗口进程。");
                     }
 
                     RefreshSessions();
@@ -916,6 +1157,20 @@ namespace rdpManager
         {
             string server = "127.0.0.2"; // 并发连接本机回环 IP
             
+            // 1. 如果该会话已经是活跃状态，且我们本地存在隐藏的 mstsc 进程，直接恢复显示即可
+            if (IsSessionActive(username))
+            {
+                if (TryShowExistingRdpWindow(username))
+                {
+                    return;
+                }
+            }
+            else
+            {
+                // 如果会话不活跃，清理可能残留的本地该用户的 mstsc 进程
+                KillExistingMstscProcessForUser(username);
+            }
+
             // 写入 Windows 凭据管理器，免除 mstsc 的密码输入提示
             Logger.LogInfo($"正在向 Windows 凭据管理器注入凭据: Server={server}, Username={username}");
             try
@@ -991,7 +1246,19 @@ namespace rdpManager
                     UseShellExecute = false,
                     Arguments = $"\"{tempRdpPath}\""
                 };
-                Process.Start(mstscPsi);
+                var newProc = Process.Start(mstscPsi);
+                if (newProc != null)
+                {
+                    lock (_rdpProcesses)
+                    {
+                        _rdpProcesses.Add(new RdpSessionProcess
+                        {
+                            Username = username,
+                            Process = newProc,
+                            IsHidden = false
+                        });
+                    }
+                }
 
                 // 延迟 10 秒清理临时 RDP 配置文件
                 System.Threading.Tasks.Task.Run(async () =>
