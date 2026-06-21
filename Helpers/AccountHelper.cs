@@ -243,7 +243,6 @@ namespace rdpManager.Helpers
                     if (userToDelete != null)
                     {
                         localMachine.Children.Remove(userToDelete);
-                        localMachine.CommitChanges();
 
                         // 删除凭据
                         CredentialHelper.DeleteCredential($"RDPManager:{username}");
