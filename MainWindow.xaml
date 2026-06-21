@@ -31,76 +31,44 @@
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Expander">
-                        <Border Background="{TemplateBinding Background}"
-                                BorderBrush="{TemplateBinding BorderBrush}"
-                                BorderThickness="{TemplateBinding BorderThickness}">
-                            <DockPanel>
-                                <ToggleButton x:Name="HeaderSite"
-                                              DockPanel.Dock="Top"
-                                              IsChecked="{Binding IsExpanded, RelativeSource={RelativeSource TemplatedParent}, Mode=TwoWay}"
-                                              Background="Transparent"
-                                              BorderThickness="0"
-                                              Padding="0,0,0,8"
-                                              HorizontalContentAlignment="Stretch"
-                                              Cursor="Hand">
-                                    <ToggleButton.Template>
-                                        <ControlTemplate TargetType="ToggleButton">
-                                            <Border Background="Transparent" Padding="{TemplateBinding Padding}">
-                                                <Grid>
-                                                    <Grid.ColumnDefinitions>
-                                                        <ColumnDefinition Width="*"/>
-                                                        <ColumnDefinition Width="Auto"/>
-                                                    </Grid.ColumnDefinitions>
-                                                    
-                                                    <ContentPresenter Content="{TemplateBinding Content}" 
-                                                                      ContentTemplate="{TemplateBinding ContentTemplate}" 
-                                                                      HorizontalAlignment="Stretch"
-                                                                      VerticalAlignment="Center"/>
-                                                    
-                                                    <!-- 精致的无圆圈三角折叠箭头 -->
-                                                    <Path x:Name="ArrowPath"
-                                                          Grid.Column="1"
-                                                          Data="M 0 0 L 4 4 L 8 0"
-                                                          Stroke="#71717A"
-                                                          StrokeThickness="1.5"
-                                                          HorizontalAlignment="Right"
-                                                          VerticalAlignment="Center"
-                                                          Margin="10,0,0,0"
-                                                          RenderTransformOrigin="0.5,0.5">
-                                                        <Path.RenderTransform>
-                                                            <RotateTransform Angle="0"/>
-                                                        </Path.RenderTransform>
-                                                    </Path>
-                                                </Grid>
-                                            </Border>
-                                            <ControlTemplate.Triggers>
-                                                <DataTrigger Binding="{Binding IsExpanded, RelativeSource={RelativeSource AncestorType=Expander}}" Value="True">
-                                                    <Setter TargetName="ArrowPath" Property="RenderTransform">
-                                                        <Setter.Value>
-                                                            <RotateTransform Angle="180"/>
-                                                        </Setter.Value>
-                                                    </Setter>
-                                                    <Setter TargetName="ArrowPath" Property="Stroke" Value="#18181B"/>
-                                                </DataTrigger>
-                                                <Trigger Property="IsMouseOver" Value="True">
-                                                    <Setter TargetName="ArrowPath" Property="Stroke" Value="#18181B"/>
-                                                </Trigger>
-                                            </ControlTemplate.Triggers>
-                                        </ControlTemplate>
-                                    </ToggleButton.Template>
-                                </ToggleButton>
-                                
-                                <ContentPresenter x:Name="ExpandSite"
-                                                  DockPanel.Dock="Bottom"
-                                                  Visibility="Collapsed"
-                                                  HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
-                                                  VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
-                                                  Margin="{TemplateBinding Padding}"/>
-                            </DockPanel>
-                        </Border>
+                        <DockPanel>
+                            <ToggleButton x:Name="HeaderSite" ContentTemplate="{TemplateBinding HeaderTemplate}" ContentTemplateSelector="{TemplateBinding HeaderTemplateSelector}" Content="{TemplateBinding Header}" DockPanel.Dock="Top" IsChecked="{Binding IsExpanded, Mode=TwoWay, RelativeSource={RelativeSource TemplatedParent}}" Margin="0" MinHeight="0" MinWidth="0" Padding="0">
+                                <ToggleButton.Template>
+                                    <ControlTemplate TargetType="ToggleButton">
+                                        <Border Background="Transparent" Padding="0,2">
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                </Grid.ColumnDefinitions>
+                                                <Path x:Name="Arrow" Grid.Column="0" HorizontalAlignment="Center" VerticalAlignment="Center" Data="M 0 0 L 4 4 L 0 8 Z" Fill="#A1A1AA" Margin="0,0,8,0" RenderTransformOrigin="0.5,0.5">
+                                                    <Path.RenderTransform>
+                                                        <RotateTransform Angle="0"/>
+                                                    </Path.RenderTransform>
+                                                </Path>
+                                                <ContentPresenter Grid.Column="1" HorizontalAlignment="Stretch" VerticalAlignment="Center"/>
+                                            </Grid>
+                                        </Border>
+                                        <ControlTemplate.Triggers>
+                                            <Trigger Property="IsChecked" Value="True">
+                                                <Setter TargetName="Arrow" Property="RenderTransform">
+                                                    <Setter.Value>
+                                                        <RotateTransform Angle="90"/>
+                                                    </Setter.Value>
+                                                </Setter>
+                                            </Trigger>
+                                            <Trigger Property="IsMouseOver" Value="True">
+                                                <Setter TargetName="Arrow" Property="Fill" Value="#3F3F46"/>
+                                            </Trigger>
+                                        </ControlTemplate.Triggers>
+                                    </ControlTemplate>
+                                </ToggleButton.Template>
+                            </ToggleButton>
+                            <ContentPresenter x:Name="ExpandSite" DockPanel.Dock="Bottom" Focusable="false" HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}" Margin="{TemplateBinding Padding}" Visibility="Collapsed" VerticalAlignment="{TemplateBinding VerticalContentAlignment}"/>
+                        </DockPanel>
                         <ControlTemplate.Triggers>
-                            <Trigger Property="IsExpanded" Value="True">
-                                <Setter TargetName="ExpandSite" Property="Visibility" Value="Visible"/>
+                            <Trigger Property="IsExpanded" Value="true">
+                                <Setter Property="Visibility" TargetName="ExpandSite" Value="Visible"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -362,13 +330,14 @@
                             <Grid>
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="8"/>
                                     <ColumnDefinition Width="Auto"/>
                                 </Grid.ColumnDefinitions>
-                                <StackPanel Orientation="Horizontal">
+                                <StackPanel Orientation="Horizontal" Grid.Column="0">
                                     <TextBlock Text="👤" FontSize="12" Margin="0,0,6,0"/>
                                     <TextBlock Text="系统账号设置" FontSize="12" FontWeight="Bold" Foreground="#3F3F46"/>
                                 </StackPanel>
-                                <Button x:Name="BtnNewUser" Grid.Column="1" Content="+" Foreground="#3F3F46" Background="Transparent" BorderThickness="0" FontSize="16" FontWeight="Bold" Cursor="Hand" Click="BtnNewUser_Click" Margin="0,0,4,0" VerticalAlignment="Center"/>
+                                <Button x:Name="BtnNewUser" Grid.Column="2" Content="+" Foreground="#3F3F46" Background="Transparent" BorderThickness="0" FontSize="16" FontWeight="Bold" Cursor="Hand" Click="BtnNewUser_Click" Width="30" HorizontalAlignment="Right"/>
                             </Grid>
                         </Expander.Header>
                         <StackPanel Margin="0,12,0,0">
@@ -478,7 +447,7 @@
                                     <TextBlock Text="🔄" FontSize="12" Margin="0,0,6,0"/>
                                     <TextBlock Text="活跃会话管理" FontSize="12" FontWeight="Bold" Foreground="#3F3F46"/>
                                 </StackPanel>
-                                <Border Grid.Column="1" Background="#E4E4E7" CornerRadius="8" Padding="6,1,6,1" VerticalAlignment="Center" Margin="0,0,4,0">
+                                <Border Grid.Column="1" Background="#E4E4E7" CornerRadius="8" Padding="6,1,6,1" VerticalAlignment="Center">
                                     <TextBlock x:Name="SessionCountBadge" Text="0" FontSize="10" FontWeight="Bold" Foreground="#3F3F46"/>
                                 </Border>
                             </Grid>
@@ -548,7 +517,7 @@
                                     <TextBlock Text="📝" FontSize="12" Margin="0,0,6,0"/>
                                     <TextBlock Text="物理运行日志" FontSize="12" FontWeight="Bold" Foreground="#3F3F46"/>
                                 </StackPanel>
-                                <Button Grid.Column="1" Content="📤" ToolTip="导出日志" Foreground="#3F3F46" Background="Transparent" BorderThickness="0" FontSize="12" FontWeight="Bold" Cursor="Hand" Click="BtnExportLog_Click" Margin="0,0,4,0" VerticalAlignment="Center"/>
+                                <Button Grid.Column="1" Content="📤" ToolTip="导出日志" Foreground="#3F3F46" Background="Transparent" BorderThickness="0" FontSize="12" FontWeight="Bold" Cursor="Hand" Click="BtnExportLog_Click"/>
                             </Grid>
                         </Expander.Header>
                         <TextBox x:Name="TxtLogOutput" Height="140" Style="{StaticResource ModernTextBox}" 

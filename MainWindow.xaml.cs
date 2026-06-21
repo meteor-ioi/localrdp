@@ -148,15 +148,15 @@ namespace rdpManager
                 EndpWrapStatusLabel.Foreground = (Brush)new BrushConverter().ConvertFromString("#EF4444")!;
             }
 
-            // 若补丁均已启用，则禁用“安装补丁”按钮
-            BtnInstallPatch.IsEnabled = !(isTermWrapActive && isEndpWrapActive);
+            bool isInstalled = isTermWrapActive && isEndpWrapActive;
 
             if (!_hasInitializedExpanderState)
             {
-                bool isInstalled = isTermWrapActive && isEndpWrapActive;
                 ExpanderPatchManager.IsExpanded = !isInstalled;
                 _hasInitializedExpanderState = true;
             }
+
+            BtnInstallPatch.IsEnabled = !isInstalled;
         }
 
         private async void BtnInstallPatch_Click(object sender, RoutedEventArgs e)
