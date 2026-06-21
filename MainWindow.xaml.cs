@@ -722,7 +722,7 @@ namespace rdpManager
                 Process.Start(mstscPsi);
 
                 // 延迟 10 秒清理临时 RDP 配置文件
-                System.Threading.Tasks.Run(async () =>
+                System.Threading.Tasks.Task.Run(async () =>
                 {
                     await System.Threading.Tasks.Task.Delay(10000);
                     try
