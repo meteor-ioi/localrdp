@@ -31,33 +31,7 @@
             <Setter Property="HeaderTemplate">
                 <Setter.Value>
                     <DataTemplate>
-                        <Grid HorizontalAlignment="{Binding HorizontalAlignment, RelativeSource={RelativeSource AncestorType=ContentPresenter}}" Margin="0,2">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="Auto"/>
-                            </Grid.ColumnDefinitions>
-                            <ContentPresenter Content="{Binding}" VerticalAlignment="Center"/>
-                            <ToggleButton x:Name="ExpandCollapseButton" Grid.Column="1" 
-                                          IsChecked="{Binding IsExpanded, RelativeSource={RelativeSource AncestorType=Expander}}"
-                                          ClickMode="Press" Background="Transparent" BorderThickness="0" Cursor="Hand">
-                                <ToggleButton.Template>
-                                    <ControlTemplate TargetType="ToggleButton">
-                                        <Border Background="Transparent">
-                                            <TextBlock x:Name="Arrow" Text="▼" FontSize="11" Foreground="#71717A" VerticalAlignment="Center"/>
-                                        </Border>
-                                        <ControlTemplate.Triggers>
-                                            <Trigger Property="IsChecked" Value="True">
-                                                <Setter TargetName="Arrow" Property="Text" Value="▲"/>
-                                                <Setter TargetName="Arrow" Property="Foreground" Value="#09090B"/>
-                                            </Trigger>
-                                            <Trigger Property="IsMouseOver" Value="True">
-                                                <Setter TargetName="Arrow" Property="Foreground" Value="#09090B"/>
-                                            </Trigger>
-                                        </ControlTemplate.Triggers>
-                                    </ControlTemplate>
-                                </ToggleButton.Template>
-                            </ToggleButton>
-                        </Grid>
+                        <ContentPresenter Content="{Binding}" VerticalAlignment="Center" Margin="0,2"/>
                     </DataTemplate>
                 </Setter.Value>
             </Setter>
@@ -239,9 +213,6 @@
                     <!-- 标题 & 徽章 -->
                     <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                         <TextBlock Text="LocalRDP" FontSize="16" FontFamily="{StaticResource MainFont}" FontWeight="Bold" Foreground="#09090B" VerticalAlignment="Center"/>
-                        <Border Background="#F4F4F5" BorderBrush="#E4E4E7" BorderThickness="1" CornerRadius="3" Margin="6,0,0,0" Padding="4,1,4,1" VerticalAlignment="Center">
-                            <TextBlock Text="rdpManager" FontSize="9" FontWeight="Bold" Foreground="#71717A"/>
-                        </Border>
                     </StackPanel>
 
                     <!-- 状态标签区 -->
@@ -479,8 +450,9 @@
                                                 </StackPanel>
                                                 <!-- 会话操作 -->
                                                 <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
-                                                    <Button Content="断连" Style="{StaticResource SecondaryBorderButton}" Width="46" Click="BtnDisconnectSession_Click" Tag="{Binding SessionId}"/>
-                                                    <Button Content="注销" Style="{StaticResource DangerBorderButton}" Width="46" Click="BtnLogoffSession_Click" Tag="{Binding SessionId}" Margin="6,0,0,0"/>
+                                                    <Button Content="打开会话" Style="{StaticResource SecondaryBorderButton}" Width="52" Click="BtnOpenSession_Click" Tag="{Binding Username}"/>
+                                                    <Button Content="保活断开" Style="{StaticResource SecondaryBorderButton}" Width="52" Click="BtnDisconnectSession_Click" Tag="{Binding SessionId}" Margin="4,0,0,0"/>
+                                                    <Button Content="彻底退出" Style="{StaticResource DangerBorderButton}" Width="52" Click="BtnLogoffSession_Click" Tag="{Binding SessionId}" Margin="4,0,0,0"/>
                                                 </StackPanel>
                                             </Grid>
                                         </Border>

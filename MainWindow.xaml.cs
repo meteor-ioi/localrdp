@@ -63,7 +63,7 @@ namespace rdpManager
             // 应用主机级阻止休眠策略
             ApplySleepPrevention();
 
-            Logger.LogInfo("rdpManager 界面初始化成功，已就绪。");
+            Logger.LogInfo("LocalRDP 界面初始化成功，已就绪。");
         }
 
         private void Logger_OnLogWritten(string logLine)
@@ -591,7 +591,7 @@ namespace rdpManager
                 if (preventSleep)
                 {
                     // ES_CONTINUOUS | ES_SYSTEM_REQUIRED | ES_DISPLAY_REQUIRED
-                    // 指令告诉 Windows 不要关闭屏幕和进入休眠
+                    // 指令告诉 Windows 不要关闭屏幕 and 进入休眠
                     SetThreadExecutionState(ES_CONTINUOUS | ES_SYSTEM_REQUIRED | ES_DISPLAY_REQUIRED);
                 }
                 else
@@ -619,6 +619,29 @@ namespace rdpManager
                 return;
             }
 
+            LaunchRdpConnection(username, password);
+        }
+
+        private void BtnOpenSession_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is Button btn && btn.Tag is string username)
+            {
+                Logger.LogInfo($"尝试从会话列表直接打开桌面会话: Username={username}");
+                
+                // 从凭证管理器中读取密码并连入会话
+                if (CredentialHelper.GetCredential($"RDPManager:{username}", out _, out string savedPwd))
+                {
+                    LaunchRdpConnection(username, savedPwd);
+                }
+                else
+                {
+                    MessageBox.Show($"未找到本地账户 '{username}' 的密码凭证，请先在系统账号设置中选中该账户并输入密码以进行缓存，然后再试。", "未缓存密码", MessageBoxButton.OK, MessageBoxImage.Warning);
+                }
+            }
+        }
+
+        private void LaunchRdpConnection(string username, string password)
+        {
             string server = "127.0.0.2"; // 并发连接本机回环 IP
             
             // 写入 Windows 凭据管理器，免除 mstsc 的密码输入提示
@@ -699,7 +722,7 @@ namespace rdpManager
                 Process.Start(mstscPsi);
 
                 // 延迟 10 秒清理临时 RDP 配置文件
-                System.Threading.Tasks.Task.Run(async () =>
+                System.Threading.Tasks.Run(async () =>
                 {
                     await System.Threading.Tasks.Task.Delay(10000);
                     try
