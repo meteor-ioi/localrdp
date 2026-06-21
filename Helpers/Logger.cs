@@ -8,6 +8,8 @@ namespace rdpManager.Helpers
         private static readonly string LogFilePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "logs", "rdpManager.log");
         private static readonly object LockObj = new object();
 
+        public static event Action<string>? OnLogWritten;
+
         public static void LogInfo(string message)
         {
             WriteLog("INFO", message);
@@ -32,6 +34,8 @@ namespace rdpManager.Helpers
         {
             try
             {
+                string logLine = $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff}] [{level}] {message}{Environment.NewLine}";
+                
                 lock (LockObj)
                 {
                     string dir = Path.GetDirectoryName(LogFilePath)!;
@@ -39,9 +43,11 @@ namespace rdpManager.Helpers
                     {
                         Directory.CreateDirectory(dir);
                     }
-                    string logLine = $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff}] [{level}] {message}{Environment.NewLine}";
                     File.AppendAllText(LogFilePath, logLine);
                 }
+
+                // 触发事件通知订阅者（如 UI 界面）
+                OnLogWritten?.Invoke(logLine);
             }
             catch
             {

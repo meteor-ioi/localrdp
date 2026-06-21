@@ -39,6 +39,29 @@ namespace rdpManager.Helpers
         }
 
         /// <summary>
+        /// 检查音频保活 EndpWrap 是否已激活（即 AudioEnumeratorDll 是否已替换为 EndpWrap.dll）
+        /// </summary>
+        public static bool IsEndpWrapActive()
+        {
+            try
+            {
+                using (RegistryKey? key = Registry.LocalMachine.OpenSubKey(@"SYSTEM\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp"))
+                {
+                    if (key != null)
+                    {
+                        string? audioDll = key.GetValue("AudioEnumeratorDll") as string;
+                        return string.Equals(audioDll, "EndpWrap.dll", StringComparison.OrdinalIgnoreCase);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError("检查音频保活激活状态失败", ex);
+            }
+            return false;
+        }
+
+        /// <summary>
         /// 检查 TermService 服务是否正在运行
         /// </summary>
         public static bool IsTermServiceRunning()
@@ -63,7 +86,7 @@ namespace rdpManager.Helpers
         public static bool DeployPatch(out string errorMessage)
         {
             errorMessage = string.Empty;
-            Logger.LogInfo("开始部署 TermWrap 补丁...");
+            Logger.LogInfo("开始部署 TermWrap 补丁及音频保活补丁...");
             try
             {
                 // 1. 创建 RDP Wrapper 文件夹
@@ -81,8 +104,20 @@ namespace rdpManager.Helpers
                 ExtractResource("UmWrap.dll", Path.Combine(RDP_WRAPPER_DIR, "UmWrap.dll"));
                 ExtractResource("Zydis.dll", Path.Combine(RDP_WRAPPER_DIR, "Zydis.dll"));
 
-                // 4. 额外部署 Zydis.dll 到 System32 目录，这是确保 svchost.exe 能够成功加载 TermWrap.dll 的关键
+                // 释放内嵌的 EndpWrap.dll 到 System32 目录
                 string system32Path = Environment.GetFolderPath(Environment.SpecialFolder.System);
+                string endpSystem32Path = Path.Combine(system32Path, "EndpWrap.dll");
+                try
+                {
+                    ExtractResource("EndpWrap.dll", endpSystem32Path);
+                    Logger.LogInfo("EndpWrap.dll 成功释放至 System32 目录。");
+                }
+                catch (Exception ex)
+                {
+                    Logger.LogWarning($"释放 EndpWrap.dll 到 System32 失败: {ex.Message}。");
+                }
+
+                // 4. 额外部署 Zydis.dll 到 System32 目录，这是确保 svchost.exe 能够成功加载 TermWrap.dll 的关键
                 string zydisSystem32Path = Path.Combine(system32Path, "Zydis.dll");
                 try
                 {
@@ -106,6 +141,21 @@ namespace rdpManager.Helpers
                     key.SetValue("ServiceDll", PATCHED_SERVICE_DLL, RegistryValueKind.ExpandString);
                 }
 
+                // 修改注册表劫持 AudioEnumeratorDll
+                using (RegistryKey? key = Registry.LocalMachine.OpenSubKey(@"SYSTEM\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp", true))
+                {
+                    if (key != null)
+                    {
+                        if (key.GetValue("LocalRDP_Backup") == null)
+                        {
+                            var originalDll = key.GetValue("AudioEnumeratorDll")?.ToString() ?? "rdpendp.dll";
+                            key.SetValue("LocalRDP_Backup", originalDll, RegistryValueKind.String);
+                        }
+                        key.SetValue("AudioEnumeratorDll", "EndpWrap.dll", RegistryValueKind.String);
+                        Logger.LogInfo("RDP-Tcp AudioEnumeratorDll 注册表项已劫持为 EndpWrap.dll。");
+                    }
+                }
+
                 // 6. 恢复 TermService 服务类型为共享进程 (0x20)。之前尝试使用 0x10 独立进程会破坏 Windows 系统的 RPC/COM 绑定安全上下文，导致 516 连接拒绝。
                 //    同时设置 SvcHostSplitDisable=1，防止 Windows 10 自动将共享进程服务拆分为独立进程（此行为会导致运行时 Type 回退为 0x10）。
                 using (RegistryKey? svcKey = Registry.LocalMachine.OpenSubKey(@"SYSTEM\CurrentControlSet\Services\TermService", true))
@@ -124,7 +174,7 @@ namespace rdpManager.Helpers
                 // 8. 重启远程桌面服务
                 ControlService("TermService", stop: false);
 
-                Logger.LogInfo("TermWrap 补丁部署成功。");
+                Logger.LogInfo("TermWrap 及音频保活补丁部署成功。");
                 return true;
             }
             catch (Exception ex)
@@ -143,6 +193,23 @@ namespace rdpManager.Helpers
                     {
                         svcRollbackKey?.SetValue("Type", 0x20, RegistryValueKind.DWord);
                     }
+                    // 回滚 AudioEnumeratorDll 注册表
+                    using (RegistryKey? rollbackAudioKey = Registry.LocalMachine.OpenSubKey(@"SYSTEM\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp", true))
+                    {
+                        if (rollbackAudioKey != null)
+                        {
+                            var backupDll = rollbackAudioKey.GetValue("LocalRDP_Backup")?.ToString();
+                            if (backupDll != null)
+                            {
+                                rollbackAudioKey.SetValue("AudioEnumeratorDll", backupDll, RegistryValueKind.String);
+                                rollbackAudioKey.DeleteValue("LocalRDP_Backup", false);
+                            }
+                            else
+                            {
+                                rollbackAudioKey.SetValue("AudioEnumeratorDll", "rdpendp.dll", RegistryValueKind.String);
+                            }
+                        }
+                    }
                     Logger.LogInfo("注册表及服务类型已成功回滚至原厂配置。");
                 }
                 catch (Exception rollbackEx)
@@ -159,7 +226,7 @@ namespace rdpManager.Helpers
         public static bool UninstallPatch(out string errorMessage)
         {
             errorMessage = string.Empty;
-            Logger.LogInfo("开始卸载 TermWrap 补丁...");
+            Logger.LogInfo("开始卸载 TermWrap 补丁及音频保活补丁...");
             try
             {
                 // 1. 强制注销所有活跃 RDP 会话，再停止服务
@@ -172,6 +239,24 @@ namespace rdpManager.Helpers
                     key?.SetValue("ServiceDll", DEFAULT_SERVICE_DLL, RegistryValueKind.ExpandString);
                 }
 
+                // 恢复注册表 AudioEnumeratorDll 为备份或默认的 rdpendp.dll
+                using (RegistryKey? key = Registry.LocalMachine.OpenSubKey(@"SYSTEM\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp", true))
+                {
+                    if (key != null)
+                    {
+                        var backupDll = key.GetValue("LocalRDP_Backup")?.ToString();
+                        if (backupDll != null)
+                        {
+                            key.SetValue("AudioEnumeratorDll", backupDll, RegistryValueKind.String);
+                            key.DeleteValue("LocalRDP_Backup", false);
+                        }
+                        else
+                        {
+                            key.SetValue("AudioEnumeratorDll", "rdpendp.dll", RegistryValueKind.String);
+                        }
+                    }
+                }
+
                 // 3. 恢复服务类型为默认共享进程 (0x20)
                 using (RegistryKey? svcKey = Registry.LocalMachine.OpenSubKey(@"SYSTEM\CurrentControlSet\Services\TermService", true))
                 {
@@ -181,9 +266,11 @@ namespace rdpManager.Helpers
                 // 4. 重新启动服务
                 ControlService("TermService", stop: false);
 
-                // 5. 尝试删除 System32 目录下的 Zydis.dll
+                // 5. 尝试删除 System32 目录下的 DLL 文件
                 string system32Path = Environment.GetFolderPath(Environment.SpecialFolder.System);
                 string zydisSystem32Path = Path.Combine(system32Path, "Zydis.dll");
+                string endpSystem32Path = Path.Combine(system32Path, "EndpWrap.dll");
+
                 try
                 {
                     if (File.Exists(zydisSystem32Path))
@@ -195,6 +282,19 @@ namespace rdpManager.Helpers
                 catch (Exception zydisEx)
                 {
                     Logger.LogWarning($"清理 System32 下的 Zydis.dll 失败 (可能被占用，重启后可删除): {zydisEx.Message}");
+                }
+
+                try
+                {
+                    if (File.Exists(endpSystem32Path))
+                    {
+                        File.Delete(endpSystem32Path);
+                        Logger.LogInfo("已成功清理 System32 下的 EndpWrap.dll。");
+                    }
+                }
+                catch (Exception endpEx)
+                {
+                    Logger.LogWarning($"清理 System32 下的 EndpWrap.dll 失败: {endpEx.Message}");
                 }
 
                 // 6. 尝试删除临时文件与目录（由于 DLL 可能会被进程锁住，若失败提示重启是正常的）

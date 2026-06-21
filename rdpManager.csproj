@@ -35,6 +35,7 @@
     <EmbeddedResource Include="Resources\TermWrap.dll" />
     <EmbeddedResource Include="Resources\UmWrap.dll" />
     <EmbeddedResource Include="Resources\Zydis.dll" />
+    <EmbeddedResource Include="Resources\EndpWrap.dll" />
   </ItemGroup>
 
 </Project>
