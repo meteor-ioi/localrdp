@@ -1,4 +1,12 @@
-# <img src="./icon.png" width="32" height="32" align="bottom" /> LocalRDP - 本地多用户虚拟桌面控制台
+# LocalRDP - 本地多用户虚拟桌面控制台
+
+![Logo](icon.png)
+
+## 软件界面
+
+![LocalRDP 软件界面](./localrdp.png)
+
+## 项目简介
 
 LocalRDP（原 rdpManager）是一款基于 WPF (C#) 开发的 Windows 多用户并发远程桌面管理平台。它旨在通过图形化界面为个人、开发者及 RPA (机器人流程自动化) 环境提供稳定、流畅、一键部署的本地回环多会话并发环境，支持同账户无限多开、物理控制台保活重定向、外设与音频双向保活重定向等高级特性。
 
@@ -88,11 +96,13 @@ flowchart TD
 
 本项目的底层依赖和关键算法受到了以下开源社区的启发与支持：
 
-1. **[rdpwrap](https://github.com/stascorp/rdpwrap)**  
+1. **[TermWrap](https://github.com/llccd/TermWrap)**  
+   本项目所集成并使用的底层 RDP 补丁与重定向核心，提供了动态反汇编特征码定位及高级多媒体重定向的底层实现。
+2. **[rdpwrap](https://github.com/stascorp/rdpwrap)**  
    远程桌面多并发连接补丁的先驱，奠定了 Windows 多会话重写与动态挂钩的架构基础。
-2. **[RDPWrapOffsetFinder](https://github.com/llccd/RDPWrapOffsetFinder)**  
+3. **[RDPWrapOffsetFinder](https://github.com/llccd/RDPWrapOffsetFinder)**  
    提供了免维护的二进制特征匹配算法，用于解析和定位远程桌面的内部跳转判定。
-3. **[Zydis](https://github.com/zyantific/zydis) & [Zycore](https://github.com/zyantific/zycore-c)**  
+4. **[Zydis](https://github.com/zyantific/zydis) & [Zycore](https://github.com/zyantific/zycore-c)**  
    高性能 x86/x64 反汇编和机器码解析库。用于在 `TermWrap` 和 `EndpWrap` 的 C++ 底层注入中对系统的机器指令集进行精准反汇编与热补丁，确保动态替换不引发内存越界。
 
 ---
@@ -102,9 +112,3 @@ flowchart TD
 - **操作系统**：Windows 10 / Windows 11 (x64) 的所有版本（包括 Home/专业/企业版）。
 - **运行环境**：.NET Desktop Runtime 8.0 (x64) 及以上。
 - **编译工具（如需二次开发）**：Visual Studio 2022。
-
----
-
-## 5. 软件界面效果
-
-![LocalRDP 软件界面](./localrdp.png)
