@@ -36,8 +36,10 @@
     <EmbeddedResource Include="Resources\x64\TermWrap.dll" />
     <EmbeddedResource Include="Resources\x64\UmWrap.dll" />
     <EmbeddedResource Include="Resources\x64\Zydis.dll" />
+    <EmbeddedResource Include="Resources\x64\rdpwrap.dll" />
     <EmbeddedResource Include="Resources\x86\TermWrap.dll" />
     <EmbeddedResource Include="Resources\x86\Zydis.dll" />
+    <EmbeddedResource Include="Resources\x86\rdpwrap.dll" />
     <EmbeddedResource Include="Resources\EndpWrap.dll" />
   </ItemGroup>
 

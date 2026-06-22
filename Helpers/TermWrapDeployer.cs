@@ -238,6 +238,54 @@ namespace rdpManager.Helpers
                 // 8. 重启远程桌面服务
                 ControlService("TermService", stop: false);
 
+                // 9. 健康检查与 rdpwrap.ini Fallback
+                Thread.Sleep(2000); // 留出服务启动与崩溃的时间窗口
+                if (!IsTermServiceRunning())
+                {
+                    Logger.LogWarning("检测到 TermService 启动后意外停止，说明当前系统 termsrv.dll 与 TermWrap.dll 不兼容！");
+                    Logger.LogInfo("开始触发 RDPWrap Fallback 降级机制...");
+
+                    // 修改注册表劫持为 rdpwrap.dll
+                    string rdpwrapDllPath = Path.Combine(RDP_WRAPPER_DIR, "rdpwrap.dll");
+                    using (RegistryKey? key = Registry.LocalMachine.OpenSubKey(TERM_SERVICE_REG_PATH, true))
+                    {
+                        key?.SetValue("ServiceDll", rdpwrapDllPath, RegistryValueKind.ExpandString);
+                    }
+
+                    // 释放 rdpwrap.dll 到目录
+                    try
+                    {
+                        ExtractResource(arch, "rdpwrap.dll", rdpwrapDllPath);
+                        Logger.LogInfo($"已释放 rdpwrap.dll (架构: {arch})。");
+                    }
+                    catch (Exception dllEx)
+                    {
+                        Logger.LogWarning($"释放 rdpwrap.dll 失败: {dllEx.Message}。请确保已将 rdpwrap.dll 添加至嵌入的资源中。");
+                        throw new Exception("缺少 rdpwrap.dll 内置资源，Fallback 失败。");
+                    }
+
+                    // 从网络拉取最新的 rdpwrap.ini
+                    string iniPath = Path.Combine(RDP_WRAPPER_DIR, "rdpwrap.ini");
+                    bool fetched = System.Threading.Tasks.Task.Run(() => RdpWrapConfigFetcher.FetchLatestConfigAsync(iniPath)).Result;
+                    
+                    if (!fetched)
+                    {
+                        throw new Exception("拉取最新 rdpwrap.ini 配置失败，降级失败。");
+                    }
+
+                    // 重新启动服务
+                    ControlService("TermService", stop: false);
+                    Thread.Sleep(2000);
+
+                    if (!IsTermServiceRunning())
+                    {
+                        throw new Exception("使用最新的 rdpwrap.ini 仍然无法启动 TermService 服务，当前系统版本可能尚未被社区破解支持。");
+                    }
+
+                    Logger.LogInfo("通过拉取社区 rdpwrap.ini 成功实现 Fallback 降级部署！");
+                    return true;
+                }
+
                 Logger.LogInfo("TermWrap 及音频保活补丁部署成功。");
                 return true;
             }
