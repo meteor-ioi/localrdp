@@ -159,15 +159,22 @@ namespace rdpManager.Helpers
                         {
                             string name = child.Name;
 
-                            // 过滤系统内置账户以及非用户主动创建的影子账户
-                            if (name.Equals("Administrator", StringComparison.OrdinalIgnoreCase) ||
-                                name.Equals("Guest", StringComparison.OrdinalIgnoreCase) ||
-                                name.Equals("DefaultAccount", StringComparison.OrdinalIgnoreCase) ||
-                                name.Equals("WDAGUtilityAccount", StringComparison.OrdinalIgnoreCase) ||
-                                name.Equals("UtilityVM", StringComparison.OrdinalIgnoreCase) ||
-                                name.Equals("defaultuser0", StringComparison.OrdinalIgnoreCase) ||
-                                name.Equals("sshd", StringComparison.OrdinalIgnoreCase) ||
-                                name.Equals("HomeGroupUser$", StringComparison.OrdinalIgnoreCase))
+                            string currentUserName = Environment.UserName;
+
+                            // 如果是当前正在使用系统环境登录的账号，无论它是什么名称，都永远保留在列表中
+                            if (name.Equals(currentUserName, StringComparison.OrdinalIgnoreCase))
+                            {
+                                // 放行当前账号
+                            }
+                            // 否则过滤系统内置账户以及非用户主动创建的影子账户
+                            else if (name.Equals("Administrator", StringComparison.OrdinalIgnoreCase) ||
+                                     name.Equals("Guest", StringComparison.OrdinalIgnoreCase) ||
+                                     name.Equals("DefaultAccount", StringComparison.OrdinalIgnoreCase) ||
+                                     name.Equals("WDAGUtilityAccount", StringComparison.OrdinalIgnoreCase) ||
+                                     name.Equals("UtilityVM", StringComparison.OrdinalIgnoreCase) ||
+                                     name.Equals("defaultuser0", StringComparison.OrdinalIgnoreCase) ||
+                                     name.Equals("sshd", StringComparison.OrdinalIgnoreCase) ||
+                                     name.Equals("HomeGroupUser$", StringComparison.OrdinalIgnoreCase))
                             {
                                 continue;
                             }
