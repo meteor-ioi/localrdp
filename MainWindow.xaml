@@ -211,14 +211,114 @@
             </Setter>
         </Style>
 
-        <!-- 下拉选择框样式 -->
+        <!-- 下拉选择框样式 (带圆角和悬停/打开状态交互) -->
         <Style x:Key="ModernComboBox" TargetType="ComboBox">
             <Setter Property="BorderBrush" Value="#E4E4E7"/>
             <Setter Property="BorderThickness" Value="1"/>
             <Setter Property="Background" Value="#FFFFFF"/>
             <Setter Property="FontSize" Value="12"/>
             <Setter Property="Height" Value="30"/>
-            <Setter Property="Padding" Value="6,4,6,4"/>
+            <Setter Property="Padding" Value="8,4,8,4"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ComboBox">
+                        <Grid>
+                            <!-- 外部圆角边框 -->
+                            <Border x:Name="border" 
+                                    Background="{TemplateBinding Background}" 
+                                    BorderBrush="{TemplateBinding BorderBrush}" 
+                                    BorderThickness="{TemplateBinding BorderThickness}" 
+                                    CornerRadius="6">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    
+                                    <!-- 选中的文本内容展示 -->
+                                    <ContentPresenter x:Name="contentPresenter" 
+                                                      Content="{TemplateBinding SelectionBoxItem}" 
+                                                      ContentTemplate="{TemplateBinding SelectionBoxItemTemplate}" 
+                                                      ContentStringFormat="{TemplateBinding SelectionBoxItemStringFormat}" 
+                                                      HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}" 
+                                                      VerticalAlignment="{TemplateBinding VerticalContentAlignment}" 
+                                                      Margin="{TemplateBinding Padding}" 
+                                                      IsHitTestVisible="False"/>
+                                    
+                                    <!-- 右侧下拉三角按钮 -->
+                                    <ToggleButton x:Name="toggleButton" 
+                                                  Grid.Column="1" 
+                                                  Background="Transparent" 
+                                                  BorderThickness="0" 
+                                                  Margin="0"
+                                                  Width="24"
+                                                  Cursor="Hand"
+                                                  IsChecked="{Binding IsDropDownOpen, Mode=TwoWay, RelativeSource={RelativeSource TemplatedParent}}">
+                                        <ToggleButton.Template>
+                                            <ControlTemplate TargetType="ToggleButton">
+                                                <Border Background="Transparent">
+                                                    <Path x:Name="Arrow" 
+                                                          HorizontalAlignment="Center" 
+                                                          VerticalAlignment="Center" 
+                                                          Data="M 0 0 L 3.5 3.5 L 7 0 Z" 
+                                                          Fill="#A1A1AA"/>
+                                                </Border>
+                                                <ControlTemplate.Triggers>
+                                                    <Trigger Property="IsMouseOver" Value="True">
+                                                        <Setter TargetName="Arrow" Property="Fill" Value="#3F3F46"/>
+                                                    </Trigger>
+                                                </ControlTemplate.Triggers>
+                                            </ControlTemplate>
+                                        </ToggleButton.Template>
+                                    </ToggleButton>
+                                </Grid>
+                            </Border>
+                            
+                            <!-- 下拉菜单弹出窗体 -->
+                            <Popup x:Name="popup" 
+                                   AllowsTransparency="True" 
+                                   IsOpen="{TemplateBinding IsDropDownOpen}" 
+                                   Placement="Bottom" 
+                                   PopupAnimation="Slide">
+                                <Border x:Name="dropDownBorder" 
+                                        Background="#FFFFFF" 
+                                        BorderBrush="#E4E4E7" 
+                                        BorderThickness="1" 
+                                        CornerRadius="6" 
+                                        MaxHeight="{TemplateBinding MaxDropDownHeight}" 
+                                        MinWidth="{Binding ActualWidth, RelativeSource={RelativeSource TemplatedParent}}" 
+                                        Margin="0,2,0,0">
+                                    <ScrollViewer x:Name="dropDownScrollViewer" SnapsToDevicePixels="True">
+                                        <Grid x:Name="grid" RenderOptions.ClearTypeHint="Enabled">
+                                            <Canvas x:Name="canvas" HorizontalAlignment="Left" Height="0" VerticalAlignment="Top" Width="0">
+                                                <Rectangle x:Name="opaqueRect" Fill="{Binding Background, ElementName=dropDownBorder}" Height="{Binding ActualHeight, ElementName=dropDownBorder}" Width="{Binding ActualWidth, ElementName=dropDownBorder}"/>
+                                            </Canvas>
+                                            <ItemsPresenter x:Name="itemsPresenter" KeyboardNavigation.DirectionalNavigation="Contained" SnapsToDevicePixels="{TemplateBinding SnapsToDevicePixels}"/>
+                                        </Grid>
+                                    </ScrollViewer>
+                                </Border>
+                            </Popup>
+                        </Grid>
+                        
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="HasItems" Value="false">
+                                <Setter TargetName="dropDownBorder" Property="Height" Value="95"/>
+                            </Trigger>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="border" Property="BorderBrush" Value="#D4D4D8"/>
+                            </Trigger>
+                            <Trigger Property="IsDropDownOpen" Value="True">
+                                <Setter TargetName="border" Property="BorderBrush" Value="#09090B"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="false">
+                                <Setter Property="Foreground" Value="#A1A1AA"/>
+                                <Setter TargetName="border" Property="Background" Value="#F4F4F5"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
         </Style>
 
         <!-- 复选框样式 -->
@@ -228,6 +328,97 @@
             <Setter Property="Margin" Value="0,0,0,8"/>
             <Setter Property="VerticalContentAlignment" Value="Center"/>
         </Style>
+
+        <!-- 现代极简细 ScrollBar 的 RepeatButton 透明模板 -->
+        <ControlTemplate x:Key="ScrollBarPageButtonTemplate" TargetType="RepeatButton">
+            <Border Background="Transparent" />
+        </ControlTemplate>
+
+        <!-- 默认 ScrollBar 样式（让整个应用中所有的滚动条全部变成现代化细条） -->
+        <Style TargetType="ScrollBar">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Width" Value="8"/>
+            <Setter Property="Height" Value="8"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ScrollBar">
+                        <Grid x:Name="Bg" SnapsToDevicePixels="True">
+                            <Track x:Name="PART_Track" IsDirectionReversed="True">
+                                <Track.DecreaseRepeatButton>
+                                    <RepeatButton Command="ScrollBar.PageUpCommand" Background="Transparent" BorderThickness="0" Template="{StaticResource ScrollBarPageButtonTemplate}"/>
+                                </Track.DecreaseRepeatButton>
+                                <Track.IncreaseRepeatButton>
+                                    <RepeatButton Command="ScrollBar.PageDownCommand" Background="Transparent" BorderThickness="0" Template="{StaticResource ScrollBarPageButtonTemplate}"/>
+                                </Track.IncreaseRepeatButton>
+                                <Track.Thumb>
+                                    <Thumb x:Name="Thumb" Background="#E4E4E7" BorderThickness="0">
+                                        <Thumb.Template>
+                                            <ControlTemplate TargetType="Thumb">
+                                                <Border Background="{TemplateBinding Background}" CornerRadius="4" Margin="2,0"/>
+                                            </ControlTemplate>
+                                        </Thumb.Template>
+                                    </Thumb>
+                                </Track.Thumb>
+                            </Track>
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger SourceName="Thumb" Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Thumb" Property="Background" Value="#D4D4D8"/>
+                            </Trigger>
+                            <Trigger SourceName="Thumb" Property="IsDragging" Value="True">
+                                <Setter TargetName="Thumb" Property="Background" Value="#A1A1AA"/>
+                            </Trigger>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Thumb" Property="Background" Value="#D4D4D8"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+            <Style.Triggers>
+                <Trigger Property="Orientation" Value="Horizontal">
+                    <Setter Property="Width" Value="Auto"/>
+                    <Setter Property="Height" Value="8"/>
+                    <Setter Property="Template">
+                        <Setter.Value>
+                            <ControlTemplate TargetType="ScrollBar">
+                                <Grid x:Name="Bg" SnapsToDevicePixels="True">
+                                    <Track x:Name="PART_Track" IsDirectionReversed="False">
+                                        <Track.DecreaseRepeatButton>
+                                            <RepeatButton Command="ScrollBar.PageLeftCommand" Background="Transparent" BorderThickness="0" Template="{StaticResource ScrollBarPageButtonTemplate}"/>
+                                        </Track.DecreaseRepeatButton>
+                                        <Track.IncreaseRepeatButton>
+                                            <RepeatButton Command="ScrollBar.PageRightCommand" Background="Transparent" BorderThickness="0" Template="{StaticResource ScrollBarPageButtonTemplate}"/>
+                                        </Track.IncreaseRepeatButton>
+                                        <Track.Thumb>
+                                            <Thumb x:Name="Thumb" Background="#E4E4E7" BorderThickness="0">
+                                                <Thumb.Template>
+                                                    <ControlTemplate TargetType="Thumb">
+                                                        <Border Background="{TemplateBinding Background}" CornerRadius="4" Margin="0,2"/>
+                                                    </ControlTemplate>
+                                                </Thumb.Template>
+                                            </Thumb>
+                                        </Track.Thumb>
+                                    </Track>
+                                </Grid>
+                                <ControlTemplate.Triggers>
+                                    <Trigger SourceName="Thumb" Property="IsMouseOver" Value="True">
+                                        <Setter TargetName="Thumb" Property="Background" Value="#D4D4D8"/>
+                                    </Trigger>
+                                    <Trigger SourceName="Thumb" Property="IsDragging" Value="True">
+                                        <Setter TargetName="Thumb" Property="Background" Value="#A1A1AA"/>
+                                    </Trigger>
+                                    <Trigger Property="IsMouseOver" Value="True">
+                                        <Setter TargetName="Thumb" Property="Background" Value="#D4D4D8"/>
+                                    </Trigger>
+                                </ControlTemplate.Triggers>
+                            </ControlTemplate>
+                        </Setter.Value>
+                    </Setter>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
     </Window.Resources>
 
     <Grid>
@@ -236,8 +427,6 @@
             <RowDefinition Height="Auto"/>
             <!-- 可滚动的内容区域 -->
             <RowDefinition Height="*"/>
-            <!-- 底部操作栏 -->
-            <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
         <!-- ======================= 顶部 Header ======================= -->
@@ -291,6 +480,13 @@
                             </StackPanel>
                         </Expander.Header>
                         <StackPanel Margin="0,12,0,0">
+                            <!-- RDP未开启警告横幅 -->
+                            <Border x:Name="RdpDisabledWarningAlert" Background="#FFFBEB" BorderBrush="#FCD34D" BorderThickness="1" CornerRadius="6" Padding="12,10" Margin="0,0,0,10" Visibility="Collapsed">
+                                <StackPanel>
+                                    <TextBlock Text="⚠️ 系统远程桌面功能尚未开启！" FontWeight="Bold" Foreground="#92400E" FontSize="12" Margin="0,0,0,4"/>
+                                    <TextBlock Text="请前往“设置” -> “系统” -> “远程桌面”启用后，再安装补丁。" Foreground="#B45309" FontSize="11" TextWrapping="Wrap" LineHeight="16"/>
+                                </StackPanel>
+                            </Border>
                             <!-- TermWrap 状态 -->
                             <Grid Margin="0,0,0,10">
                                 <Grid.ColumnDefinitions>
@@ -323,24 +519,24 @@
                     </Expander>
                 </Border>
 
-                <!-- 2. 系统账号设置 -->
+                <!-- 2. 连接设置 -->
                 <Border Style="{StaticResource CardBorderStyle}">
-                    <Expander Style="{StaticResource ModernExpander}" IsExpanded="True">
-                        <Expander.Header>
-                            <Grid>
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="8"/>
-                                    <ColumnDefinition Width="Auto"/>
-                                </Grid.ColumnDefinitions>
-                                <StackPanel Orientation="Horizontal" Grid.Column="0">
-                                    <TextBlock Text="👤" FontSize="12" Margin="0,0,6,0"/>
-                                    <TextBlock Text="系统账号设置" FontSize="12" FontWeight="Bold" Foreground="#3F3F46"/>
-                                </StackPanel>
-                                <Button x:Name="BtnNewUser" Grid.Column="2" Content="+" Foreground="#3F3F46" Background="Transparent" BorderThickness="0" FontSize="16" FontWeight="Bold" Cursor="Hand" Click="BtnNewUser_Click" Width="30" HorizontalAlignment="Right"/>
-                            </Grid>
-                        </Expander.Header>
-                        <StackPanel Margin="0,12,0,0">
+                    <StackPanel>
+                        <!-- 卡片头部 -->
+                        <Grid Margin="0,0,0,12">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                <TextBlock Text="👤" FontSize="12" Margin="0,0,6,0"/>
+                                <TextBlock Text="连接设置" FontSize="12" FontWeight="Bold" Foreground="#3F3F46"/>
+                            </StackPanel>
+                            <Button x:Name="BtnNewUser" Grid.Column="1" Content="+" Foreground="#3F3F46" Background="Transparent" BorderThickness="0" FontSize="16" FontWeight="Bold" Cursor="Hand" Click="BtnNewUser_Click" Width="30" HorizontalAlignment="Right"/>
+                        </Grid>
+
+                        <!-- ① 账号选择区（始终可见） -->
+                        <StackPanel>
                             <!-- 账号下拉及删除 -->
                             <Grid Margin="0,0,0,10">
                                 <Grid.ColumnDefinitions>
@@ -352,32 +548,39 @@
                                 <Button x:Name="BtnDeleteAccount" Grid.Column="2" Content="🗑️" Width="30" Height="30" Style="{StaticResource SecondaryBorderButton}" ToolTip="删除选中用户" Click="BtnDeleteAccount_Click"/>
                             </Grid>
                             <!-- 密码输入与眼睛显隐 -->
-                            <Grid>
+                            <Grid Margin="0,0,0,10">
                                 <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="Auto"/>
+                                    <Grid.ColumnDefinition Width="*"/>
+                                    <Grid.ColumnDefinition Width="Auto"/>
                                 </Grid.ColumnDefinitions>
                                 
-                                <!-- 密码框(密文) & 文本框(明文) -->
                                 <PasswordBox x:Name="AccountPasswordBox" Style="{StaticResource ModernPasswordBox}" Height="30" VerticalContentAlignment="Center" Margin="0" Grid.Column="0" PasswordChanged="AccountPasswordBox_PasswordChanged"/>
                                 <TextBox x:Name="AccountPasswordTxt" Style="{StaticResource ModernTextBox}" Height="30" VerticalContentAlignment="Center" Margin="0" Grid.Column="0" Visibility="Collapsed" TextChanged="AccountPasswordTxt_TextChanged"/>
                                 
                                 <Button x:Name="BtnShowHidePassword" Grid.Column="1" Content="👁️" Width="30" Height="30" Style="{StaticResource SecondaryBorderButton}" Margin="4,0,0,0" Click="BtnShowHidePassword_Click"/>
                             </Grid>
                         </StackPanel>
-                    </Expander>
-                </Border>
 
-                <!-- 3. 重定向及保活 -->
-                <Border Style="{StaticResource CardBorderStyle}">
-                    <Expander Style="{StaticResource ModernExpander}" IsExpanded="True">
-                        <Expander.Header>
-                            <StackPanel Orientation="Horizontal">
-                                <TextBlock Text="⚙️" FontSize="12" Margin="0,0,6,0"/>
-                                <TextBlock Text="重定向及保活" FontSize="12" FontWeight="Bold" Foreground="#3F3F46"/>
-                            </StackPanel>
-                        </Expander.Header>
-                        <StackPanel Margin="0,12,0,0">
+                        <!-- ② 折叠区（点击箭头展开高级选项） -->
+                        <Grid Margin="0,4,0,10">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <Separator Grid.Column="0" Background="#E4E4E7" VerticalAlignment="Center"/>
+                            <Button x:Name="BtnToggleAdvancedSettings" Grid.Column="1" Style="{StaticResource SecondaryBorderButton}" 
+                                    Height="24" Padding="8,2" BorderThickness="0" Background="Transparent" Click="BtnToggleAdvancedSettings_Click" Cursor="Hand">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock x:Name="TxtAdvancedSettingsArrow" Text="▼" FontSize="10" Foreground="#71717A" Margin="0,0,4,0"/>
+                                    <TextBlock Text="高级功能" FontSize="11" Foreground="#71717A"/>
+                                </StackPanel>
+                            </Button>
+                            <Separator Grid.Column="2" Background="#E4E4E7" VerticalAlignment="Center"/>
+                        </Grid>
+
+                        <!-- ③ 高级选项区（默认折叠） -->
+                        <StackPanel x:Name="PanelAdvancedSettings" Visibility="Collapsed" Margin="0,0,0,12">
                             <!-- 分辨率与缩放 -->
                             <Grid Margin="0,0,0,12">
                                 <Grid.ColumnDefinitions>
@@ -430,7 +633,10 @@
                                 </StackPanel>
                             </Border>
                         </StackPanel>
-                    </Expander>
+
+                        <!-- ④ 连接虚拟桌面按钮 -->
+                        <Button x:Name="BtnConnectVirtualDesktop" Content="🔌 连接虚拟桌面" Style="{StaticResource PrimaryBlackButton}" Height="38" FontSize="13" Click="BtnConnectVirtualDesktop_Click"/>
+                    </StackPanel>
                 </Border>
 
                 <!-- 4. 活跃会话管理 -->
@@ -441,12 +647,14 @@
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*"/>
                                     <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="Auto"/>
                                 </Grid.ColumnDefinitions>
-                                <StackPanel Orientation="Horizontal">
+                                <StackPanel Orientation="Horizontal" Grid.Column="0">
                                     <TextBlock Text="🔄" FontSize="12" Margin="0,0,6,0"/>
                                     <TextBlock Text="活跃会话管理" FontSize="12" FontWeight="Bold" Foreground="#3F3F46"/>
                                 </StackPanel>
-                                <Border Grid.Column="1" Background="#E4E4E7" CornerRadius="8" Padding="6,1,6,1" VerticalAlignment="Center">
+                                <Button x:Name="BtnCleanZombieSessions" Grid.Column="1" Content="🧹" ToolTip="清理所有断开会话" Width="26" Height="22" Style="{StaticResource SecondaryBorderButton}" Margin="0,0,6,0" Padding="0" Click="BtnCleanZombieSessions_Click"/>
+                                <Border Grid.Column="2" Background="#E4E4E7" CornerRadius="8" Padding="6,1,6,1" VerticalAlignment="Center">
                                     <TextBlock x:Name="SessionCountBadge" Text="0" FontSize="10" FontWeight="Bold" Foreground="#3F3F46"/>
                                 </Border>
                             </Grid>
@@ -474,6 +682,7 @@
                                                     <ColumnDefinition Width="*"/>
                                                     <ColumnDefinition Width="Auto"/>
                                                 </Grid.ColumnDefinitions>
+                                                
                                                 <!-- 会话信息 -->
                                                 <StackPanel Grid.Column="0">
                                                     <StackPanel Orientation="Horizontal">
@@ -482,20 +691,55 @@
                                                         <TextBlock Text=" : " FontSize="12" FontWeight="Bold" Foreground="#18181B"/>
                                                         <TextBlock Text="{Binding Username}" FontSize="12" FontWeight="Bold" Foreground="#18181B"/>
                                                     </StackPanel>
+                                                    
                                                     <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
-                                                        <TextBlock Text="{Binding StateText}" FontSize="11" Foreground="#10B981" Margin="0,0,8,0"/>
+                                                        <!-- 物理控制台状态文字，默认隐藏 -->
+                                                        <TextBlock x:Name="TxtConsoleStatus" Text="🖥️ 物理控制台" FontSize="11" Foreground="#3B82F6" Margin="0,0,8,0" Visibility="Collapsed"/>
+                                                        <!-- 虚拟桌面状态文字，默认显示 -->
+                                                        <TextBlock x:Name="TxtVirtualStatus" Text="{Binding StateText}" FontSize="11" Foreground="#10B981" Margin="0,0,8,0" Visibility="Visible"/>
+                                                        
                                                         <TextBlock Text="运行时间: " FontSize="11" Foreground="#71717A"/>
                                                         <TextBlock Text="{Binding DurationText}" FontSize="11" Foreground="#71717A"/>
                                                     </StackPanel>
                                                 </StackPanel>
-                                                <!-- 会话操作 -->
-                                                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                                                
+                                                <!-- 虚拟会话操作，默认显示 -->
+                                                <StackPanel x:Name="PanelVirtualActions" Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Visibility="Visible">
                                                     <Button Content="打开会话" Style="{StaticResource SecondaryBorderButton}" Width="52" Click="BtnOpenSession_Click" Tag="{Binding Username}"/>
-                                                    <Button Content="保活断开" Style="{StaticResource SecondaryBorderButton}" Width="52" Click="BtnDisconnectSession_Click" Tag="{Binding SessionId}" Margin="4,0,0,0"/>
+                                                    <Button x:Name="BtnDisconnect" Content="保活断开" Style="{StaticResource SecondaryBorderButton}" Width="52" Click="BtnDisconnectSession_Click" Tag="{Binding SessionId}" Margin="4,0,0,0"/>
                                                     <Button Content="彻底退出" Style="{StaticResource DangerBorderButton}" Width="52" Click="BtnLogoffSession_Click" Tag="{Binding SessionId}" Margin="4,0,0,0"/>
+                                                </StackPanel>
+                                                
+                                                <!-- Console 会话操作，默认隐藏 -->
+                                                <StackPanel x:Name="PanelConsoleActions" Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Visibility="Collapsed">
+                                                    <Button Content="⊕ 再开一个" Style="{StaticResource SecondaryBorderButton}" Width="70" Click="BtnAddVirtualScreen_Click" Tag="{Binding Username}"/>
                                                 </StackPanel>
                                             </Grid>
                                         </Border>
+                                        
+                                        <DataTemplate.Triggers>
+                                            <!-- 当是 Console 会话时，切换可见性 -->
+                                            <DataTrigger Binding="{Binding IsConsole}" Value="True">
+                                                <Setter TargetName="TxtConsoleStatus" Property="Visibility" Value="Visible"/>
+                                                <Setter TargetName="TxtVirtualStatus" Property="Visibility" Value="Collapsed"/>
+                                                <Setter TargetName="PanelVirtualActions" Property="Visibility" Value="Collapsed"/>
+                                                <Setter TargetName="PanelConsoleActions" Property="Visibility" Value="Visible"/>
+                                            </DataTrigger>
+                                            
+                                            <!-- 如果是断开状态，调整保活断开按钮是否可用 -->
+                                            <DataTrigger Binding="{Binding StateText}" Value="断开">
+                                                <Setter TargetName="BtnDisconnect" Property="IsEnabled" Value="False"/>
+                                                <Setter TargetName="TxtVirtualStatus" Property="Foreground" Value="#F59E0B"/>
+                                            </DataTrigger>
+                                            <DataTrigger Binding="{Binding StateText}" Value="Disconnected">
+                                                <Setter TargetName="BtnDisconnect" Property="IsEnabled" Value="False"/>
+                                                <Setter TargetName="TxtVirtualStatus" Property="Foreground" Value="#F59E0B"/>
+                                            </DataTrigger>
+                                            <DataTrigger Binding="{Binding StateText}" Value="Disc">
+                                                <Setter TargetName="BtnDisconnect" Property="IsEnabled" Value="False"/>
+                                                <Setter TargetName="TxtVirtualStatus" Property="Foreground" Value="#F59E0B"/>
+                                            </DataTrigger>
+                                        </DataTemplate.Triggers>
                                     </DataTemplate>
                                 </ListBox.ItemTemplate>
                             </ListBox>
@@ -531,13 +775,10 @@
             </StackPanel>
         </ScrollViewer>
 
-        <!-- ======================= 底部操作栏 ======================= -->
-        <Border Grid.Row="2" Background="#FFFFFF" BorderBrush="#E4E4E7" BorderThickness="0,1,0,0" Padding="14,12,14,14">
-            <Button x:Name="BtnConnectVirtualDesktop" Content="🔌 连接虚拟桌面" Style="{StaticResource PrimaryBlackButton}" Height="40" FontSize="14" Click="BtnConnectVirtualDesktop_Click"/>
-        </Border>
+
 
         <!-- ======================= 全局新建用户模态框 ======================= -->
-        <Grid x:Name="NewUserModal" Grid.RowSpan="3" Background="#80000000" Visibility="Collapsed">
+        <Grid x:Name="NewUserModal" Grid.RowSpan="2" Background="#80000000" Visibility="Collapsed">
             <Border Width="340" HorizontalAlignment="Center" VerticalAlignment="Center" 
                     Background="#FFFFFF" BorderBrush="#E4E4E7" BorderThickness="1" CornerRadius="8" Padding="20">
                 <StackPanel>

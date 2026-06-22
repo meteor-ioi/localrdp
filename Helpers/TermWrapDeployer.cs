@@ -725,14 +725,14 @@ namespace rdpManager.Helpers
                     key.SetValue("fPromptForPassword", 0, RegistryValueKind.DWord);
                 }
 
-                // 5. 启用单一会话限制 (关键修复：确保同一个账号在断开后能重连到原会话，而不是无限创建新会话)
+                // 5. 允许单用户多会话（关键修复：允许多会话并发，解决同一账号多开虚拟屏的冲突）
                 using (RegistryKey key = Registry.LocalMachine.CreateSubKey(@"SYSTEM\CurrentControlSet\Control\Terminal Server", true))
                 {
-                    key.SetValue("fSingleSessionPerUser", 1, RegistryValueKind.DWord);
+                    key.SetValue("fSingleSessionPerUser", 0, RegistryValueKind.DWord);
                 }
                 using (RegistryKey key = Registry.LocalMachine.CreateSubKey(@"SOFTWARE\Policies\Microsoft\Windows NT\Terminal Services", true))
                 {
-                    key.SetValue("fSingleSessionPerUser", 1, RegistryValueKind.DWord);
+                    key.SetValue("fSingleSessionPerUser", 0, RegistryValueKind.DWord);
                 }
 
                 Logger.LogInfo("系统凭据分配策略、免密连接及单用户多会话组策略配置成功。");
@@ -740,6 +740,119 @@ namespace rdpManager.Helpers
             catch (Exception ex)
             {
                 Logger.LogWarning($"配置系统凭据分配与单用户多会话策略失败: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// 检查系统远程桌面（RDP）功能是否已开启
+        /// </summary>
+        public static bool IsRdpFeatureEnabled()
+        {
+            try
+            {
+                using (RegistryKey? key = Registry.LocalMachine.OpenSubKey(@"SYSTEM\CurrentControlSet\Control\Terminal Server"))
+                {
+                    if (key != null)
+                    {
+                        var denyVal = key.GetValue("fDenyTSConnections");
+                        if (denyVal != null)
+                        {
+                            return Convert.ToInt32(denyVal) == 0;
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError("检查远程桌面启用状态失败", ex);
+            }
+            return false;
+        }
+
+        /// <summary>
+        /// 清理断开（Disconnected/Disc）状态的会话。
+        /// 如果指定了 targetUsername，则只注销该用户的断开会话；否则注销所有断开会话。
+        /// </summary>
+        public static void CleanupDisconnectedSessions(string? targetUsername = null)
+        {
+            try
+            {
+                Logger.LogInfo(targetUsername == null 
+                    ? "正在一键清理所有断开状态的会话..." 
+                    : $"正在清理用户 {targetUsername} 的断开会话...");
+
+                var psi = new ProcessStartInfo("qwinsta")
+                {
+                    RedirectStandardOutput = true,
+                    UseShellExecute = false,
+                    CreateNoWindow = true,
+                    StandardOutputEncoding = System.Text.Encoding.GetEncoding(0)
+                };
+
+                using (var proc = Process.Start(psi))
+                {
+                    if (proc == null) return;
+                    string output = proc.StandardOutput.ReadToEnd();
+                    proc.WaitForExit(5000);
+
+                    foreach (string line in output.Split('\n'))
+                    {
+                        if (string.IsNullOrWhiteSpace(line))
+                            continue;
+
+                        if (line.Contains("SESSIONNAME", StringComparison.OrdinalIgnoreCase) || line.Contains("会话名"))
+                            continue;
+
+                        if (line.Contains("services", StringComparison.OrdinalIgnoreCase))
+                            continue;
+
+                        string processedLine = line.Replace('>', ' ');
+                        string[] tokens = processedLine.Split(new char[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
+                        
+                        int stateIndex = -1;
+                        for (int i = 0; i < tokens.Length; i++)
+                        {
+                            string t = tokens[i];
+                            if (string.Equals(t, "Disc", StringComparison.OrdinalIgnoreCase) || 
+                                string.Equals(t, "Disconnected", StringComparison.OrdinalIgnoreCase) || 
+                                t == "断开")
+                            {
+                                stateIndex = i;
+                                break;
+                            }
+                        }
+
+                        if (stateIndex >= 1)
+                        {
+                            string idStr = tokens[stateIndex - 1];
+                            string username = (stateIndex >= 2) ? tokens[stateIndex - 2] : string.Empty;
+
+                            if (int.TryParse(idStr, out int sessionId))
+                            {
+                                if (targetUsername != null && !string.Equals(username, targetUsername, StringComparison.OrdinalIgnoreCase))
+                                {
+                                    continue;
+                                }
+
+                                Logger.LogInfo($"检测到断开会话: 用户={username}, ID={sessionId}，正在注销...");
+                                var logoffPsi = new ProcessStartInfo("logoff", sessionId.ToString())
+                                {
+                                    UseShellExecute = false,
+                                    CreateNoWindow = true
+                                };
+                                using (var logoffProc = Process.Start(logoffPsi))
+                                {
+                                    logoffProc?.WaitForExit(5000);
+                                }
+                            }
+                        }
+                    }
+                }
+                Logger.LogInfo("断开会话清理完成。");
+            }
+            catch (Exception ex)
+            {
+                Logger.LogWarning($"清理断开会话时出错: {ex.Message}");
             }
         }
     }

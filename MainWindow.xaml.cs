@@ -298,9 +298,10 @@ namespace rdpManager
                 PrivilegeWarningAlert.Visibility = Visibility.Visible;
             }
 
-            // 2. 判断 RDP 服务状态
+            // 2. 判断 RDP 服务状态和启用状态
             bool isRdpRunning = TermWrapDeployer.IsTermServiceRunning();
-            if (isRdpRunning)
+            bool isRdpEnabled = TermWrapDeployer.IsRdpFeatureEnabled();
+            if (isRdpRunning && isRdpEnabled)
             {
                 RdpTag.Background = (Brush)new BrushConverter().ConvertFromString("#ECFDF5")!;
                 RdpTagTxt.Text = "RDP开";
@@ -309,9 +310,12 @@ namespace rdpManager
             else
             {
                 RdpTag.Background = (Brush)new BrushConverter().ConvertFromString("#F4F4F5")!;
-                RdpTagTxt.Text = "RDP关";
+                RdpTagTxt.Text = isRdpEnabled ? "RDP关" : "RDP禁用";
                 RdpTagTxt.Foreground = (Brush)new BrushConverter().ConvertFromString("#71717A")!;
             }
+
+            // 控制警告横幅显示
+            RdpDisabledWarningAlert.Visibility = isRdpEnabled ? Visibility.Collapsed : Visibility.Visible;
 
             // 3. 判断补丁激活状态
             bool isTermWrapActive = TermWrapDeployer.IsMultiSessionActive();
@@ -346,11 +350,17 @@ namespace rdpManager
                 _hasInitializedExpanderState = true;
             }
 
-            BtnInstallPatch.IsEnabled = !isInstalled;
+            // 仅当补丁未安装且 RDP 已开启时，才允许安装补丁
+            BtnInstallPatch.IsEnabled = !isInstalled && isRdpEnabled;
         }
 
         private async void BtnInstallPatch_Click(object sender, RoutedEventArgs e)
         {
+            if (!TermWrapDeployer.IsRdpFeatureEnabled())
+            {
+                MessageBox.Show("系统远程桌面功能尚未开启！\n请前往“系统设置 -> 远程桌面”启用后再安装补丁。", "警告", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
             BtnInstallPatch.IsEnabled = false;
             Logger.LogInfo("正在部署补丁及外设重定向注册表...");
             
@@ -448,10 +458,18 @@ namespace rdpManager
             ComboAccounts.Items.Clear();
             try
             {
+                string currentUser = Environment.UserName;
                 var accounts = AccountHelper.GetLocalAccounts(true);
                 foreach (var acc in accounts)
                 {
-                    ComboAccounts.Items.Add(acc.Name);
+                    if (string.Equals(acc.Name, currentUser, StringComparison.OrdinalIgnoreCase))
+                    {
+                        ComboAccounts.Items.Add(acc.Name + " 👑");
+                    }
+                    else
+                    {
+                        ComboAccounts.Items.Add(acc.Name);
+                    }
                 }
 
                 if (ComboAccounts.Items.Count > 0)
@@ -476,8 +494,16 @@ namespace rdpManager
             if (string.IsNullOrEmpty(selected) || selected == "暂无系统用户")
             {
                 UpdatePasswordFields(string.Empty);
+                BtnConnectVirtualDesktop.Content = "🔌 连接虚拟桌面";
                 return;
             }
+
+            if (selected.EndsWith(" 👑"))
+            {
+                selected = selected.Substring(0, selected.Length - 3);
+            }
+
+            BtnConnectVirtualDesktop.Content = $"🔌 以 {selected} 连接虚拟桌面";
 
             // 从凭证管理器中读取密码并填入
             if (CredentialHelper.GetCredential($"RDPManager:{selected}", out _, out string savedPwd))
@@ -820,8 +846,8 @@ namespace rdpManager
                             if (line.Contains("SESSIONNAME", StringComparison.OrdinalIgnoreCase) || line.Contains("会话名"))
                                 continue;
 
-                            // 过滤 console 和 services 核心会话名
-                            if (line.Contains("console", StringComparison.OrdinalIgnoreCase) || line.Contains("services", StringComparison.OrdinalIgnoreCase))
+                            // 仅过滤 services 核心会话（保留 console）
+                            if (line.Contains("services", StringComparison.OrdinalIgnoreCase))
                                 continue;
 
                             // 替换 '>' 为空格，避免会话名与前缀粘连导致 tokens 错位
@@ -856,16 +882,22 @@ namespace rdpManager
                                 string idStr = tokens[stateIndex - 1];
                                 if (int.TryParse(idStr, out int sessionId))
                                 {
-                                    string username = "RDP回环会话";
+                                    bool isConsole = processedLine.Contains("console", StringComparison.OrdinalIgnoreCase);
+                                    string username = isConsole ? "console" : "RDP回环会话";
                                     if (stateIndex >= 2)
                                     {
                                         string candidate = tokens[stateIndex - 2];
                                         if (!candidate.StartsWith("rdp-tcp", StringComparison.OrdinalIgnoreCase) && 
-                                            !candidate.Equals("services", StringComparison.OrdinalIgnoreCase) &&
-                                            !candidate.Equals("console", StringComparison.OrdinalIgnoreCase))
+                                            !candidate.Equals("services", StringComparison.OrdinalIgnoreCase))
                                         {
                                             username = candidate;
                                         }
+                                    }
+
+                                    // 如果是当前物理控制台登录账号，或者正好是当前系统的 Windows 用户，打上王冠 👑 标记
+                                    if (string.Equals(username, Environment.UserName, StringComparison.OrdinalIgnoreCase))
+                                    {
+                                        username += " 👑";
                                     }
 
                                     sessions.Add(new SessionItem
@@ -873,7 +905,8 @@ namespace rdpManager
                                         SessionId = sessionId,
                                         Username = username,
                                         StateText = isActive ? "🟢 活跃" : "🟡 断开",
-                                        DurationText = "保活中"
+                                        DurationText = "保活中",
+                                        IsConsole = isConsole
                                     });
                                 }
                             }
@@ -1153,21 +1186,57 @@ namespace rdpManager
             }
         }
 
-        private void LaunchRdpConnection(string username, string password)
+        private void LaunchRdpConnection(string username, string password, bool forceNew = false)
         {
             string server = "127.0.0.2"; // 并发连接本机回环 IP
             
-            // 1. 如果该会话已经是活跃状态，且我们本地存在隐藏的 mstsc 进程，直接恢复显示即可
-            if (IsSessionActive(username))
+            // 查找现有的该用户会话
+            SessionItem? existingSession = null;
+            if (ListSessions.ItemsSource is IEnumerable<SessionItem> items)
+            {
+                existingSession = items.FirstOrDefault(i => 
+                    !i.IsConsole && (
+                        i.Username.Equals(username, StringComparison.OrdinalIgnoreCase) || 
+                        i.Username.Equals(username + " 👑", StringComparison.OrdinalIgnoreCase)
+                    )
+                );
+            }
+
+            // 智能策略：如果不是强制新开，且有活跃会话，直接恢复 mstsc 窗口
+            if (!forceNew && existingSession != null && existingSession.StateText.Contains("活跃"))
             {
                 if (TryShowExistingRdpWindow(username))
                 {
                     return;
                 }
             }
-            else
+            
+            // 智能策略：如果该用户存在已断开的旧会话，自动将其 logoff 以免新建连接冲突
+            if (existingSession != null && existingSession.StateText.Contains("断开"))
             {
-                // 如果会话不活跃，清理可能残留的本地该用户的 mstsc 进程
+                Logger.LogInfo($"检测到用户 '{username}' 存在已断开的旧会话 (SessionId={existingSession.SessionId})，正在自动注销以避免冲突...");
+                try
+                {
+                    var logoffPsi = new ProcessStartInfo("logoff", existingSession.SessionId.ToString())
+                    {
+                        UseShellExecute = false,
+                        CreateNoWindow = true
+                    };
+                    using (var logoffProc = Process.Start(logoffPsi))
+                    {
+                        logoffProc?.WaitForExit(3000);
+                    }
+                    // 等待 1 秒确保注销清理工作完成
+                    System.Threading.Thread.Sleep(1000);
+                }
+                catch (Exception ex)
+                {
+                    Logger.LogWarning($"注销旧会话失败: {ex.Message}");
+                }
+            }
+            else if (!forceNew)
+            {
+                // 如果没有检测到已有会话，清理残留的本地 mstsc 进程
                 KillExistingMstscProcessForUser(username);
             }
 
@@ -1285,6 +1354,58 @@ namespace rdpManager
             }
         }
 
+        private void LaunchRdpConnection(string username, string password)
+        {
+            LaunchRdpConnection(username, password, false);
+        }
+
+        private void BtnCleanZombieSessions_Click(object sender, RoutedEventArgs e)
+        {
+            e.Handled = true;
+            Logger.LogInfo("用户触发一键注销所有断开会话...");
+            System.Threading.Tasks.Task.Run(() =>
+            {
+                TermWrapDeployer.CleanupDisconnectedSessions();
+                Dispatcher.Invoke(() => RefreshSessions());
+            });
+        }
+
+        private void BtnAddVirtualScreen_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is Button btn && btn.Tag is string rawUsername)
+            {
+                string username = rawUsername;
+                if (username.EndsWith(" 👑"))
+                {
+                    username = username.Substring(0, username.Length - 3);
+                }
+
+                Logger.LogInfo($"用户选择强制为账户 '{username}' 新建一个虚拟桌面会话...");
+                if (CredentialHelper.GetCredential($"RDPManager:{username}", out _, out string savedPwd))
+                {
+                    LaunchRdpConnection(username, savedPwd, forceNew: true);
+                }
+                else
+                {
+                    MessageBox.Show($"未找到本地账户 '{username}' 的密码凭证，请先在系统账号设置中选中该账户并输入密码以进行缓存，然后再试。", "未缓存密码", MessageBoxButton.OK, MessageBoxImage.Warning);
+                }
+            }
+        }
+
+        private void BtnToggleAdvancedSettings_Click(object sender, RoutedEventArgs e)
+        {
+            if (PanelAdvancedSettings.Visibility == Visibility.Collapsed)
+            {
+                PanelAdvancedSettings.Visibility = Visibility.Visible;
+                TxtAdvancedSettingsArrow.Text = "▲";
+            }
+            else
+            {
+                PanelAdvancedSettings.Visibility = Visibility.Collapsed;
+                TxtAdvancedSettingsArrow.Text = "▼";
+            }
+        }
+
         // ======================= 系统托盘及窗口关闭 =======================
 
         private void InitializeNotifyIcon()
@@ -1382,5 +1503,6 @@ namespace rdpManager
         public string Username { get; set; } = string.Empty;
         public string StateText { get; set; } = string.Empty;
         public string DurationText { get; set; } = string.Empty;
+        public bool IsConsole { get; set; }
     }
 }
