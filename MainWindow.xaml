@@ -5,8 +5,9 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         mc:Ignorable="d"
         Title="多用户虚拟桌面"
-        Foreground="{DynamicResource TextPrimaryBrush}" Height="820" Width="450"
-        WindowStartupLocation="CenterScreen" ResizeMode="CanMinimize"
+        Foreground="{DynamicResource TextPrimaryBrush}" Height="770" Width="450"
+        MinWidth="450" MaxWidth="450" MinHeight="550"
+        WindowStartupLocation="CenterScreen" ResizeMode="CanResize"
         Background="{DynamicResource WindowBackgroundBrush}" BorderBrush="{DynamicResource WindowBackgroundBrush}" BorderThickness="0">
 
     <Window.Resources>
@@ -528,7 +529,7 @@
                                     <TextBlock Text="🛡️" FontSize="12" Margin="0,0,6,0"/>
                                     <TextBlock Text="并发补丁管理" FontSize="12" FontWeight="Bold" Foreground="{DynamicResource TextHeadingBrush}"/>
                                 </StackPanel>
-                                <TextBlock x:Name="PatchSuccessIcon" Grid.Column="1" Text="☑️" FontSize="12" Margin="0" Visibility="Collapsed" HorizontalAlignment="Right" VerticalAlignment="Center"/>
+                                <TextBlock x:Name="PatchSuccessIcon" Grid.Column="1" Text="✓" Foreground="{DynamicResource TextPrimaryBrush}" FontSize="12" Margin="0" Visibility="Collapsed" HorizontalAlignment="Right" VerticalAlignment="Center"/>
                             </Grid>
                         </Expander.Header>
                         <StackPanel Margin="0,12,0,0">
@@ -741,7 +742,7 @@
                                 </ListBox.ItemContainerStyle>
                                 <ListBox.ItemTemplate>
                                     <DataTemplate>
-                                        <Border BorderBrush="#F4F4F5" BorderThickness="0,0,0,1" Padding="0,6,0,6">
+                                        <Border BorderBrush="{DynamicResource SeparatorBrush}" BorderThickness="0,0,0,1" Padding="0,6,0,6">
                                             <Grid>
                                                 <Grid.ColumnDefinitions>
                                                     <ColumnDefinition Width="*"/>
