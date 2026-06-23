@@ -200,6 +200,15 @@ namespace rdpManager
                         rdpProc.IsHidden = false;
                         rdpProc.TargetWindows.Clear();
                         Logger.LogInfo($"已从后台恢复并显示用户 '{username}' 的 RDP 窗口。");
+
+                        // 立即更新 UI 状态
+                        var session = _sessionsCollection.FirstOrDefault(s => s.Username.Equals(username, StringComparison.OrdinalIgnoreCase));
+                        if (session != null)
+                        {
+                            session.CanOpenSession = false;
+                            session.CanDisconnect = true;
+                        }
+
                         return true;
                     }
                     else
@@ -1060,6 +1069,17 @@ namespace rdpManager
                                         _sessionStartTimes.Remove(sessionId);
                                     }
 
+                                    bool isWindowVisible = false;
+                                    lock (_rdpProcesses)
+                                    {
+                                        _rdpProcesses.RemoveAll(p => p.Process == null || p.Process.HasExited);
+                                        var match = _rdpProcesses.FirstOrDefault(p => p.Username.Equals(username, StringComparison.OrdinalIgnoreCase));
+                                        if (match != null && match.Process != null && !match.Process.HasExited && !match.IsHidden)
+                                        {
+                                            isWindowVisible = true;
+                                        }
+                                    }
+
                                     parsedSessions.Add(new SessionItem
                                     {
                                         SessionId = sessionId,
@@ -1069,7 +1089,9 @@ namespace rdpManager
                                         IsConsole = isConsole,
                                         IsCurrentUser = isCurrentUser,
                                         IsActive = isActive,
-                                        LogonTime = isActive ? _sessionStartTimes[sessionId] : (DateTime?)null
+                                        LogonTime = isActive ? _sessionStartTimes[sessionId] : (DateTime?)null,
+                                        CanOpenSession = !isWindowVisible,
+                                        CanDisconnect = isWindowVisible
                                     });
                                 }
                             }
@@ -1099,6 +1121,8 @@ namespace rdpManager
                             existing.StateText = parsed.StateText;
                             existing.IsActive = parsed.IsActive;
                             existing.LogonTime = parsed.LogonTime;
+                            existing.CanOpenSession = parsed.CanOpenSession;
+                            existing.CanDisconnect = parsed.CanDisconnect;
                         }
                         else
                         {
@@ -1131,6 +1155,10 @@ namespace rdpManager
                     if (item != null)
                     {
                         username = item.Username;
+                        
+                        // 立即更新 UI 状态
+                        item.CanOpenSession = true;
+                        item.CanDisconnect = false;
                     }
                 }
 
@@ -1552,6 +1580,14 @@ namespace rdpManager
                         });
                     }
 
+                    // 立即更新 UI 状态
+                    var session = _sessionsCollection.FirstOrDefault(s => s.Username.Equals(username, StringComparison.OrdinalIgnoreCase));
+                    if (session != null)
+                    {
+                        session.CanOpenSession = false;
+                        session.CanDisconnect = true;
+                    }
+
                     // 保存手动输入的密码到本地凭据
                     try
                     {
@@ -1821,6 +1857,20 @@ namespace rdpManager
                     OnPropertyChanged(nameof(IconText)); 
                 } 
             }
+        }
+
+        private bool _canOpenSession = true;
+        public bool CanOpenSession
+        {
+            get => _canOpenSession;
+            set { if (_canOpenSession != value) { _canOpenSession = value; OnPropertyChanged(nameof(CanOpenSession)); } }
+        }
+
+        private bool _canDisconnect = false;
+        public bool CanDisconnect
+        {
+            get => _canDisconnect;
+            set { if (_canDisconnect != value) { _canDisconnect = value; OnPropertyChanged(nameof(CanDisconnect)); } }
         }
     }
 }

@@ -774,8 +774,8 @@
                                                 
                                                 <!-- 虚拟会话操作，默认显示 -->
                                                 <StackPanel x:Name="PanelVirtualActions" Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Visibility="Visible">
-                                                    <Button Content="打开会话" Style="{StaticResource SecondaryBorderButton}" Width="52" Click="BtnOpenSession_Click" Tag="{Binding Username}"/>
-                                                    <Button x:Name="BtnDisconnect" Content="保活断开" Style="{StaticResource SecondaryBorderButton}" Width="52" Click="BtnDisconnectSession_Click" Tag="{Binding SessionId}" Margin="4,0,0,0"/>
+                                                    <Button Content="打开会话" Style="{StaticResource SecondaryBorderButton}" Width="52" Click="BtnOpenSession_Click" Tag="{Binding Username}" IsEnabled="{Binding CanOpenSession}"/>
+                                                    <Button x:Name="BtnDisconnect" Content="保活断开" Style="{StaticResource SecondaryBorderButton}" Width="52" Click="BtnDisconnectSession_Click" Tag="{Binding SessionId}" Margin="4,0,0,0" IsEnabled="{Binding CanDisconnect}"/>
                                                     <Button Content="彻底退出" Style="{StaticResource DangerBorderButton}" Width="52" Click="BtnLogoffSession_Click" Tag="{Binding SessionId}" Margin="4,0,0,0"/>
                                                 </StackPanel>
                                                 
