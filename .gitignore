@@ -24,3 +24,7 @@ publish/
 # AI Agent metadata/instructions
 .antigravity/
 
+# Temporary test files
+test_*.cs
+
+
