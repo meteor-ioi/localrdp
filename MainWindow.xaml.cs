@@ -37,34 +37,7 @@ namespace rdpManager
         private const uint ES_SYSTEM_REQUIRED = 0x00000001;
         private const uint ES_DISPLAY_REQUIRED = 0x00000002;
 
-        [DllImport("wtsapi32.dll", SetLastError = true)]
-        private static extern bool WTSQuerySessionInformation(IntPtr hServer, int sessionId, int wtsInfoClass, out IntPtr ppBuffer, out uint pBytesReturned);
-
-        [DllImport("wtsapi32.dll")]
-        private static extern void WTSFreeMemory(IntPtr pMemory);
-
-        private const int WTSLogonTime = 18;
-
-        private static DateTime? GetSessionLogonTime(int sessionId)
-        {
-            if (WTSQuerySessionInformation(IntPtr.Zero, sessionId, WTSLogonTime, out IntPtr buffer, out uint bytesReturned))
-            {
-                try
-                {
-                    if (buffer != IntPtr.Zero && bytesReturned >= 8)
-                    {
-                        long fileTime = Marshal.ReadInt64(buffer);
-                        if (fileTime > 0)
-                            return DateTime.FromFileTime(fileTime);
-                    }
-                }
-                finally
-                {
-                    WTSFreeMemory(buffer);
-                }
-            }
-            return null;
-        }
+        private Dictionary<int, DateTime> _sessionStartTimes = new Dictionary<int, DateTime>();
 
         // Win32 API 辅助方法，用于保活断开时隐藏 RDP 窗口，恢复连接时显示
         [DllImport("user32.dll")]
@@ -1036,16 +1009,26 @@ namespace rdpManager
 
                                     bool isCurrentUser = string.Equals(username, Environment.UserName, StringComparison.OrdinalIgnoreCase);
 
+                                    if (isActive)
+                                    {
+                                        if (!_sessionStartTimes.ContainsKey(sessionId))
+                                            _sessionStartTimes[sessionId] = DateTime.Now;
+                                    }
+                                    else
+                                    {
+                                        _sessionStartTimes.Remove(sessionId);
+                                    }
+
                                     sessions.Add(new SessionItem
                                     {
                                         SessionId = sessionId,
                                         Username = username,
-                                        StateText = isActive ? "🟢 活跃" : "🟡 断开",
+                                        StateText = isActive ? "活跃" : "断开",
                                         DurationText = string.Empty,
                                         IsConsole = isConsole,
                                         IsCurrentUser = isCurrentUser,
                                         IsActive = isActive,
-                                        LogonTime = isActive ? GetSessionLogonTime(sessionId) : null
+                                        LogonTime = isActive ? _sessionStartTimes[sessionId] : (DateTime?)null
                                     });
                                 }
                             }
@@ -1684,6 +1667,7 @@ namespace rdpManager
         public int SessionId { get; set; }
         public string Username { get; set; } = string.Empty;
         public string StateText { get; set; } = string.Empty;
+        public string IconText => IsActive ? "\uE77B " : string.Empty;
         
         private string _durationText = string.Empty;
         public string DurationText 

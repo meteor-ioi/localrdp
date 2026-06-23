@@ -658,6 +658,7 @@
                                     <TextBlock Text="分辨率" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,0,0,4"/>
                                     <ComboBox x:Name="ComboResolution" Style="{StaticResource ModernComboBox}">
                                         <ComboBoxItem Content="自适应窗口" Tag="0x0"/>
+                                        <ComboBoxItem Content="全屏模式" Tag="fullscreen"/>
                                         <ComboBoxItem Content="1920×1080" Tag="1920x1080"/>
                                         <ComboBoxItem Content="2560×1440" Tag="2560x1440"/>
                                         <ComboBoxItem Content="3840×2160" Tag="3840x2160"/>
@@ -756,14 +757,14 @@
                                                         <TextBlock Text="{Binding SessionId}" FontSize="12" FontWeight="Bold" Foreground="{DynamicResource TextPrimaryBrush}"/>
                                                         <TextBlock Text=" : " FontSize="12" FontWeight="Bold" Foreground="{DynamicResource TextPrimaryBrush}"/>
                                                         <TextBlock Text="{Binding Username}" FontSize="12" FontWeight="Bold" Foreground="{DynamicResource TextPrimaryBrush}"/>
-                                                        <TextBlock x:Name="TxtCurrentUserCrown" Text=" 👑" FontSize="12" FontWeight="Bold" Foreground="#F59E0B" Visibility="Collapsed"/>
                                                     </StackPanel>
                                                     
                                                     <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
                                                         <!-- 物理控制台状态文字，默认隐藏 -->
                                                         <TextBlock x:Name="TxtConsoleStatus" Text="🖥️ 物理控制台" FontSize="11" Foreground="#3B82F6" Margin="0,0,8,0" Visibility="Collapsed"/>
                                                         <!-- 虚拟桌面状态文字，默认显示 -->
-                                                        <TextBlock x:Name="TxtVirtualStatus" Text="{Binding StateText}" FontSize="11" Foreground="{DynamicResource BadgeSuccessTextBrush}" Margin="0,0,8,0" Visibility="Visible"/>
+                                                        <TextBlock Text="{Binding IconText}" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="11" Foreground="{DynamicResource BadgeSuccessTextBrush}" Margin="0,0,2,0" VerticalAlignment="Center"/>
+                                                        <TextBlock x:Name="TxtVirtualStatus" Text="{Binding StateText}" FontSize="11" Foreground="{DynamicResource BadgeSuccessTextBrush}" Margin="0,0,8,0" VerticalAlignment="Center" Visibility="Visible"/>
                                                         <!-- 实时连接时长 -->
                                                         <TextBlock x:Name="TxtDuration" Text="{Binding DurationText}" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,0,8,0" Visibility="Visible"/>
                                                     </StackPanel>
@@ -784,11 +785,6 @@
                                         </Border>
                                         
                                         <DataTemplate.Triggers>
-                                            <!-- 当前登录的 Windows 用户账号，在界面上显示皇冠 -->
-                                            <DataTrigger Binding="{Binding IsCurrentUser}" Value="True">
-                                                <Setter TargetName="TxtCurrentUserCrown" Property="Visibility" Value="Visible"/>
-                                            </DataTrigger>
-                                            
                                             <!-- 当是 Console 会话时，切换可见性 -->
                                             <DataTrigger Binding="{Binding IsConsole}" Value="True">
                                                 <Setter TargetName="TxtConsoleStatus" Property="Visibility" Value="Visible"/>
