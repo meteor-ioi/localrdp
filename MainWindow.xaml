@@ -683,7 +683,7 @@
                                         <CheckBox x:Name="ChkClipboard" Content="同步剪贴板" Style="{StaticResource ModernCheckBox}" IsChecked="True"/>
                                         <CheckBox x:Name="ChkAudio" Content="重定向音频" Style="{StaticResource ModernCheckBox}" IsChecked="True"/>
                                         <CheckBox x:Name="ChkMicrophone" Content="重定向麦克风" Style="{StaticResource ModernCheckBox}" IsChecked="False"/>
-                                        <CheckBox x:Name="ChkDrives" Content="挂载本地磁盘" Style="{StaticResource ModernCheckBox}" IsChecked="False"/>
+                                        <CheckBox x:Name="ChkSmartCards" Content="共享智能卡/U盾" Style="{StaticResource ModernCheckBox}" IsChecked="False"/>
                                         <CheckBox x:Name="ChkPrinters" Content="共享打印机" Style="{StaticResource ModernCheckBox}" IsChecked="False"/>
                                         <CheckBox x:Name="ChkSmartSizing" Content="自适应窗口" Style="{StaticResource ModernCheckBox}" IsChecked="True"/>
                                     </UniformGrid>

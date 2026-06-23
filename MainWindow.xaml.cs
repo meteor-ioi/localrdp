@@ -1463,8 +1463,8 @@ namespace rdpManager
                 // 重定向配置
                 rdpContent.AppendLine($"redirectclipboard:i:{(ChkClipboard.IsChecked == true ? 1 : 0)}");
                 rdpContent.AppendLine($"audiomode:i:{(ChkAudio.IsChecked == true ? 0 : 2)}"); // 2 = 静音保活
-                rdpContent.AppendLine($"redirectsmartcards:i:{(ChkMicrophone.IsChecked == true ? 1 : 0)}");
-                rdpContent.AppendLine($"redirectdrives:i:{(ChkDrives.IsChecked == true ? 1 : 0)}");
+                rdpContent.AppendLine($"audiocapturemode:i:{(ChkMicrophone.IsChecked == true ? 1 : 0)}");
+                rdpContent.AppendLine($"redirectsmartcards:i:{(ChkSmartCards.IsChecked == true ? 1 : 0)}");
                 rdpContent.AppendLine($"redirectprinters:i:{(ChkPrinters.IsChecked == true ? 1 : 0)}");
                 rdpContent.AppendLine($"smart sizing:i:{(ChkSmartSizing.IsChecked == true ? 1 : 0)}");
                 rdpContent.AppendLine("dynamic resolution:i:1"); // 开启窗口拉伸动态刷新
